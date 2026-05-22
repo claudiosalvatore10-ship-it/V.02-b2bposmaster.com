@@ -21,7 +21,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
   const [negocio, setNegocio] = useState('');
   const [direccion, setDireccion] = useState('');
   const [necesidades, setNecesidades] = useState<string[]>([]);
-  const [businessType, setBusinessType] = useState<'restaurant' | 'wholesale' | 'retail' | 'grocery'>('wholesale');
+  const [businessType, setBusinessType] = useState<'restaurant' | 'wholesale' | 'retail' | 'grocery' | 'combo'>('wholesale');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -295,7 +295,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Tipo de Negocio *</label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <button 
                       type="button"
                       onClick={() => setBusinessType('wholesale')}
@@ -327,6 +327,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
                     >
                       <Grid className="w-5 h-5" />
                       <span className="text-xs">Grocery</span>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setBusinessType('combo')}
+                      className={`py-3 px-2 rounded-xl border font-bold transition-all flex flex-col items-center justify-center gap-2 col-span-2 lg:col-span-1 ${businessType === 'combo' ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
+                    >
+                      <div className="flex gap-1"><Grid className="w-5 h-5" /><ChefHat className="w-5 h-5" /></div>
+                      <span className="text-xs">Combo (Groc. + Rest.)</span>
                     </button>
                   </div>
                 </div>
