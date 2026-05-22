@@ -273,11 +273,35 @@ const Catalog: React.FC<CatalogProps> = ({
               className={`w-full pl-10 pr-10 py-3 rounded-lg border focus:ring-2 outline-none text-lg ${selectedClient ? 'border-green-500 bg-green-50 focus:ring-green-500' : 'border-gray-200 focus:ring-blue-500'}`}
               value={selectedClient ? `${selectedClient.nombre}` : clientSearch}
               onChange={e => {
-                setClientSearch(e.target.value);
+                const val = e.target.value;
+                setClientSearch(val);
                 setShowClientResults(true);
-                if (selectedClient) onSelectClient?.(null);
+                const exactMatch = clients.find(c => c.nombre.toLowerCase() === val.toLowerCase());
+                if (exactMatch) {
+                  onSelectClient?.(exactMatch);
+                  setShowClientResults(false);
+                } else if (selectedClient) {
+                  onSelectClient?.(null);
+                }
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && filteredClients.length > 0) {
+                  onSelectClient?.(filteredClients[0]);
+                  setShowClientResults(false);
+                  setClientSearch('');
+                  e.target.blur();
+                }
               }}
               onFocus={() => setShowClientResults(true)}
+              onBlur={() => {
+                setTimeout(() => {
+                  if (!selectedClient && clientSearch && filteredClients.length > 0) {
+                    onSelectClient?.(filteredClients[0]);
+                    setClientSearch('');
+                  }
+                  setShowClientResults(false);
+                }, 200);
+              }}
             />
             {selectedClient && (
               <button 

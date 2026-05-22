@@ -1,4 +1,4 @@
-import { Product, Client, Salesman, Category, Tax, Device, StoreSettings, Vendor, PurchaseOrder } from './types';
+import { Product, Client, Salesman, Category, Tax, Device, StoreSettings, Vendor, PurchaseOrder, BusinessCategory } from './types';
 
 export const INITIAL_STORE_SETTINGS: StoreSettings = {
   id: 'STORE-001',
@@ -105,41 +105,50 @@ export const INITIAL_DEVICES: Device[] = [
   { id: 'pr1', nombre: 'Impresora Bodega', tipo: 'Printer', conexion: 'WIFI', direccion: '192.168.1.100', activo: true }
 ];
 
-export const DEFAULT_BUSINESS_CATEGORIES = [
-  {
-    id: 'restaurant',
-    name: 'Restaurant / Food',
-    enabledFields: {
-      upc: false, sku: false, stock: true, lote: false, vencimiento: false, componenteActivo: false, laboratorio: false, unidad: false,
-      descuento: true, costo: true, categoria: true, nombre: true, precio: true, threshold: false, imagenUrl: true, descripcion: true,
-      thermal80mm: true, printA4: false, modifiers: true
-    }
-  },
+export const DEFAULT_BUSINESS_CATEGORIES: BusinessCategory[] = [
   {
     id: 'wholesale',
-    name: 'Retail / Wholesale',
+    name: 'Wholesale',
     enabledFields: {
-      upc: true, sku: true, stock: true, lote: true, vencimiento: true, componenteActivo: false, laboratorio: false, unidad: true,
+      upc: true, boxBarcode: true, unitsPerBox: true, sku: true, stock: true, lote: true, vencimiento: true, componenteActivo: true, laboratorio: true, unidad: true,
       descuento: true, costo: true, categoria: true, nombre: true, precio: true, threshold: true, imagenUrl: true, descripcion: true,
-      thermal80mm: true, printA4: true, modifiers: false
+      thermal80mm: false, printA4: true, modifiers: false, serialNumber: false, kiosk: false
     }
   },
   {
-    id: 'pharmacy',
-    name: 'Pharmacy',
+    id: 'retail',
+    name: 'Retail Electronics / Misc',
     enabledFields: {
-      upc: true, sku: true, stock: true, lote: true, vencimiento: true, componenteActivo: true, laboratorio: true, unidad: true,
+      upc: true, boxBarcode: false, unitsPerBox: false, sku: true, stock: true, lote: false, vencimiento: false, componenteActivo: false, laboratorio: false, unidad: true,
       descuento: true, costo: true, categoria: true, nombre: true, precio: true, threshold: true, imagenUrl: true, descripcion: true,
-      thermal80mm: false, printA4: true, modifiers: false
+      thermal80mm: true, printA4: true, modifiers: false, serialNumber: true, kiosk: false
     }
   },
   {
     id: 'grocery',
     name: 'Grocery / Supermarket',
     enabledFields: {
-      upc: true, sku: true, stock: true, lote: false, vencimiento: true, componenteActivo: false, laboratorio: false, unidad: true,
+      upc: true, boxBarcode: true, unitsPerBox: true, sku: true, stock: true, lote: false, vencimiento: true, componenteActivo: false, laboratorio: false, unidad: true,
       descuento: true, costo: true, categoria: true, nombre: true, precio: true, threshold: true, imagenUrl: true, descripcion: true,
-      thermal80mm: true, printA4: false, modifiers: false
+      thermal80mm: true, printA4: false, modifiers: false, serialNumber: false, kiosk: false
+    }
+  },
+  {
+    id: 'restaurant',
+    name: 'Restaurant / Food',
+    enabledFields: {
+      upc: false, boxBarcode: false, unitsPerBox: false, sku: false, stock: true, lote: false, vencimiento: false, componenteActivo: false, laboratorio: false, unidad: false,
+      descuento: true, costo: true, categoria: true, nombre: true, precio: true, threshold: false, imagenUrl: true, descripcion: true,
+      thermal80mm: true, printA4: false, modifiers: true, serialNumber: false, kiosk: true
+    }
+  },
+  {
+    id: 'combo',
+    name: 'Combo (Grocery + Restaurant)',
+    enabledFields: {
+      upc: true, boxBarcode: true, unitsPerBox: true, sku: true, stock: true, lote: false, vencimiento: true, componenteActivo: false, laboratorio: false, unidad: true,
+      descuento: true, costo: true, categoria: true, nombre: true, precio: true, threshold: true, imagenUrl: true, descripcion: true,
+      thermal80mm: true, printA4: false, modifiers: true, serialNumber: false, kiosk: true
     }
   }
 ];

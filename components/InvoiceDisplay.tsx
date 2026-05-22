@@ -1,9 +1,9 @@
 import React from 'react';
-import { TicketPreview, InvoicePreview } from '../../components/PrintPreviews';
-import { Inventory, StoreSettings, Order, Client, Salesman } from '../../types';
+import { TicketPreview, InvoicePreview } from './PrintPreviews';
+import { Inventory, StoreSettings, Order, Client, Salesman } from '../types';
 import { X, Printer, Mail, CheckCircle2, DollarSign, CreditCard, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import { db } from '../../firebase';
+import { db } from '../firebase';
 import { collection, addDoc } from 'firebase/firestore';
 
 interface InvoiceDisplayProps {
@@ -63,10 +63,10 @@ const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
   const totalCredit = (subtotal * (1 + creditSurcharge / 100)) + taxAmount + tipAmount;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[60] p-4 animate-in fade-in duration-300">
-      <div className={`bg-white rounded-[2.5rem] shadow-2xl w-full ${storeSettings?.printFormat === 'ticket' ? 'max-w-4xl' : 'max-w-[95vw]'} max-h-[95vh] overflow-hidden flex flex-col border border-white/20`}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[60] p-4 animate-in fade-in duration-300 print:p-0 print:bg-white print:static print:inset-auto print:block">
+      <div className={`bg-white rounded-[2.5rem] shadow-2xl w-full ${storeSettings?.printFormat === 'ticket' ? 'max-w-4xl' : 'max-w-[95vw]'} max-h-[95vh] overflow-hidden flex flex-col border border-white/20 print:w-full print:max-w-full print:max-h-full print:rounded-none print:border-none print:shadow-none print:m-0`}>
         {/* Header */}
-        <div className="p-6 lg:p-8 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
+        <div className="p-6 lg:p-8 border-b border-gray-100 flex justify-between items-center bg-white shrink-0 print:hidden">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
               <FileText className="w-6 h-6" />
@@ -96,12 +96,12 @@ const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
           </button>
         </div>
 
-        <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+        <div className="flex-1 overflow-hidden flex flex-col lg:flex-row print:flex-col print:overflow-visible print:p-0">
           {/* Left Side: Receipt Preview */}
-          <div className={`${(showReceiptOnMobile || isFullscreenPreview) ? 'flex' : 'hidden lg:flex'} w-full ${isFullscreenPreview ? 'lg:flex-1' : (storeSettings?.printFormat === 'ticket' ? 'lg:w-[400px]' : 'lg:w-[600px]')} bg-gray-100/50 p-6 lg:p-8 flex flex-col items-center justify-center lg:border-r border-gray-100 overflow-y-auto`}>
+          <div className={`${(showReceiptOnMobile || isFullscreenPreview) ? 'flex' : 'hidden lg:flex'} w-full ${isFullscreenPreview ? 'lg:flex-1' : (storeSettings?.printFormat === 'ticket' ? 'lg:w-[400px]' : 'lg:w-[600px]')} bg-gray-100/50 p-6 lg:p-8 flex flex-col items-center justify-center lg:border-r border-gray-100 overflow-y-auto print:block print:w-full print:p-0 print:bg-white print:border-none print:overflow-visible`}>
             {storeSettings?.printFormat === 'ticket' ? (
               <TicketPreview 
-                cart={items.map(i => ({ ...i, cartId: i.id || Math.random().toString() } as any))}
+                cart={items.map(i => ({ ...i, cartId: i.id || Math.random().toString(), precio: i.costo !== undefined ? i.costo : i.precio } as any))}
                 storeSettings={storeSettings || {} as any}
                 salesman={salesman}
                 subtotal={subtotal}
@@ -112,10 +112,11 @@ const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
                 creditSurcharge={creditSurcharge}
                 paymentMethod={data.metodoPago}
                 splits={order?.splits}
+                invoiceId={data.id || data.invoiceNumber || data.factura}
               />
             ) : (
               <InvoicePreview 
-                cart={items.map(i => ({ ...i, cartId: i.id || Math.random().toString() } as any))}
+                cart={items.map(i => ({ ...i, cartId: i.id || Math.random().toString(), precio: i.costo !== undefined ? i.costo : i.precio } as any))}
                 storeSettings={storeSettings || {} as any}
                 salesman={salesman}
                 client={client}
@@ -129,12 +130,13 @@ const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
                 creditTerm={data.terminosCredito}
                 dueDate={date}
                 splits={order?.splits}
+                invoiceId={data.id || data.invoiceNumber || data.factura}
               />
             )}
           </div>
 
           {/* Right Side: Details & Actions */}
-          <div className={`${(!showReceiptOnMobile && !isFullscreenPreview) ? 'flex' : 'hidden lg:flex'} flex-1 p-6 lg:p-8 overflow-y-auto flex-col space-y-8`}>
+          <div className={`${(!showReceiptOnMobile && !isFullscreenPreview) ? 'flex' : 'hidden lg:flex'} flex-1 p-6 lg:p-8 overflow-y-auto flex-col space-y-8 print:hidden`}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-gray-50/50 p-5 rounded-[1.5rem] border border-gray-100">
                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">

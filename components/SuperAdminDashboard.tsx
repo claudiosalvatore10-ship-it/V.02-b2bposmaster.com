@@ -19,7 +19,7 @@ const ALL_RUBRO_FIELDS = [
   'upc', 'boxBarcode', 'unitsPerBox', 'nombre', 'precio', 'costo',
   'categoria', 'sku', 'lote', 'vencimiento', 'stock',
   'componenteActivo', 'laboratorio', 'unidad', 'descuento',
-  'threshold', 'imagenUrl', 'descripcion', 'thermal80mm', 'printA4', 'modifiers'
+  'threshold', 'imagenUrl', 'descripcion', 'thermal80mm', 'printA4', 'modifiers', 'serialNumber', 'kiosk'
 ];
 
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onSelectStore }) => {
@@ -954,7 +954,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
         dbRubros.forEach(r => {
           const index = merged.findIndex(m => m.id === r.id);
           if (index >= 0) {
-            merged[index] = r;
+            // Keep default properties like name if they are missing in the db document
+            merged[index] = { 
+              ...merged[index], 
+              ...r,
+              enabledFields: {
+                ...merged[index].enabledFields,
+                ...(r.enabledFields || {})
+              }
+            };
           } else {
             merged.push(r);
           }
@@ -2229,7 +2237,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
                             onClick={async () => {
                               const currentVal = rubro.enabledFields[field as keyof typeof rubro.enabledFields] ?? false;
                               const updatedFields = { ...rubro.enabledFields, [field]: !currentVal };
-                              await setDoc(doc(db, 'system', 'config', 'rubros', rubro.id), { enabledFields: updatedFields }, { merge: true });
+                              await setDoc(doc(db, 'system', 'config', 'rubros', rubro.id), { name: rubro.name, enabledFields: updatedFields }, { merge: true });
                             }}
                             className={`w-12 h-6 rounded-full transition-all relative ${rubro.enabledFields[field as keyof typeof rubro.enabledFields] ? 'bg-emerald-500' : 'bg-slate-200'}`}
                           >

@@ -260,8 +260,11 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
   };
 
   const handleComplete = () => {
+    const selectedClientObj = clients.find(c => c.id === selectedClient);
+    
     onComplete({
       clienteId: selectedClient,
+      cliente: selectedClientObj,
       vendedorId: selectedSalesman,
       metodoPago: paymentMethod as any,
       checkNumber: paymentMethod === 'Check' ? checkNumber : undefined,

@@ -6,7 +6,7 @@ import { Product, CartItem, Order, Client, Salesman, Category, Tax, Device, Inve
 import { INITIAL_PRODUCTS, INITIAL_CLIENTS, INITIAL_SALESMEN, INITIAL_CATEGORIES, INITIAL_TAXES, INITIAL_DEVICES, INITIAL_STORE_SETTINGS, INITIAL_VENDORS, INITIAL_PURCHASE_ORDERS, DEFAULT_BUSINESS_CATEGORIES } from './constants';
 import Catalog from './components/Catalog';
 import InvoiceModal from './components/InvoiceModal';
-import ReceiveInventoryModal from './src/components/ReceiveInventoryModal';
+import ReceiveInventoryModal from './components/ReceiveInventoryModal';
 import AdminDashboard from './components/AdminDashboard';
 import { StoreSetup } from './components/StoreSetup';
 import { SuperAdminDashboard } from './components/SuperAdminDashboard';
@@ -15,24 +15,26 @@ import { CustomerDisplay } from './components/CustomerDisplay';
 import { KioskView } from './components/KioskView';
 import { GroceryView } from './components/GroceryView';
 import PinPad from './components/PinPad';
-import InvoiceDisplay from './src/components/InvoiceDisplay';
+import InvoiceDisplay from './components/InvoiceDisplay';
 import { LandingPage } from './components/LandingPage';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShoppingCart, ShieldAlert, ShieldCheck, LogIn, LogOut, User as UserIcon, 
   Package, FileText, UserPlus, X, RefreshCw, Sparkles, Ticket, Phone, Pause, 
   Printer, ChefHat, Trash2, Plus, Minus, ChevronDown, ChevronUp, Monitor, 
-  LayoutGrid, Building2, Link, Menu, History, Clock, FileBarChart, Settings, List, Grid, Delete, Tags, Tag, Archive
+  LayoutGrid, Building2, Link, Menu, History, Clock, FileBarChart, Settings, List, Grid, Delete, Tags, Tag, Archive, Utensils
 } from 'lucide-react';
 import { collection, onSnapshot, doc, setDoc, addDoc, deleteDoc, serverTimestamp, getDocFromServer, writeBatch, query, where, getDoc, getDocs } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from './firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { CreateClientModal } from './components/CreateClientModal';
 import { OrderListModal } from './components/OrderListModal';
+import { InventoryListModal } from './components/InventoryListModal';
 import { FloatingOrderSummary } from './components/FloatingOrderSummary';
 import { TicketPreview, InvoicePreview, KitchenTicketPreview } from './components/PrintPreviews';
 import { CreditCard, DollarSign, Eye, EyeOff, Calculator } from 'lucide-react';
 import { ZReportModal } from './components/ZReportModal';
+import { EditCartItemModal } from './components/EditCartItemModal';
 
 const MainPOS: React.FC = () => {
   const { t } = useTranslation();
@@ -62,7 +64,9 @@ const MainPOS: React.FC = () => {
   const [inventory, setInventory] = useState<Inventory[]>([]);
   const [isCreatingClient, setIsCreatingClient] = useState(false);
   const [isViewingOrders, setIsViewingOrders] = useState(false);
+  const [isViewingInventory, setIsViewingInventory] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedInventoryRecord, setSelectedInventoryRecord] = useState<Inventory | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [businessCategory, setBusinessCategory] = useState<BusinessCategory | null>(null);
   const [showIntegratedTicket, setShowIntegratedTicket] = useState(true);
@@ -72,6 +76,8 @@ const MainPOS: React.FC = () => {
   const [customerInfo, setCustomerInfo] = useState({ name: '', phone: '' });
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [featuredProduct, setFeaturedProduct] = useState<Product | null>(null);
+  const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
+  const [comboView, setComboView] = useState<'grocery' | 'restaurant'>('grocery');
 
   const formatPhoneNumber = (value: string) => {
     const phoneNumber = value.replace(/\D/g, '');
@@ -359,11 +365,19 @@ const MainPOS: React.FC = () => {
     let unsubRubro: () => void = () => {};
     if (storeSettings.businessCategory) {
       unsubRubro = onSnapshot(doc(db, 'system', 'config', 'rubros', storeSettings.businessCategory), (snapshot) => {
+        const fallback = DEFAULT_BUSINESS_CATEGORIES.find(c => c.id === storeSettings.businessCategory);
         if (snapshot.exists()) {
-          setBusinessCategory(snapshot.data() as BusinessCategory);
+          const data = snapshot.data();
+          setBusinessCategory({
+            ...fallback,
+            ...data,
+            enabledFields: {
+              ...(fallback?.enabledFields || {}),
+              ...(data.enabledFields || {})
+            }
+          } as BusinessCategory);
         } else {
           // Fallback to static if not found in db
-          const fallback = DEFAULT_BUSINESS_CATEGORIES.find(c => c.id === storeSettings.businessCategory);
           setBusinessCategory(fallback as BusinessCategory || null);
         }
       }, (error) => {
@@ -666,6 +680,7 @@ const MainPOS: React.FC = () => {
       const clientWithStore = { ...client, storeId: storeSettings.id };
       await setDoc(doc(db, 'clients', client.id), sanitizeForFirestore(clientWithStore));
       setClients([...clients, clientWithStore]);
+      setSelectedClient(clientWithStore);
       setIsCreatingClient(false);
       toast.success('Client added successfully!');
     } catch (error) {
@@ -1158,13 +1173,21 @@ const MainPOS: React.FC = () => {
                       (businessCategory?.name?.toLowerCase().includes('wholesale')) ||
                       (storeSettings.nombre?.toLowerCase().includes('wholesale'));
 
-  const displayFormat = (businessCategory?.id === 'restaurant' && !isWholesale) ? 'ticket' :
+  const displayFormat = (['restaurant', 'combo'].includes(businessCategory?.id || '') && !isWholesale) ? 'ticket' :
                         (businessCategory?.enabledFields?.printA4 ? 'invoice' : 
                         (businessCategory?.enabledFields?.thermal80mm ? 'ticket' : 
                         (isWholesale ? 'invoice' : (storeSettings.printFormat || 'ticket'))));
 
+  const filteredCategories = businessCategory?.id === 'combo' 
+    ? categories.filter(c => c.moduleType === comboView) 
+    : categories;
+
+  const filteredProducts = businessCategory?.id === 'combo'
+    ? products.filter(p => !p.moduleType || p.moduleType === comboView)
+    : products;
+
   return (
-    <div className="flex flex-col h-screen bg-slate-100 relative overflow-hidden font-sans">
+    <div className="flex flex-col h-screen bg-slate-100 relative overflow-hidden font-sans print:bg-white print:h-auto print:overflow-visible">
       <Toaster position="top-center" richColors />
 
       {/* Side Navigation Menu */}
@@ -1218,6 +1241,19 @@ const MainPOS: React.FC = () => {
                       </button>
 
                       <button 
+                        onClick={() => { setIsViewingInventory(true); setShowSideMenu(false); }}
+                        className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white group transition-all"
+                      >
+                         <div className="w-10 h-10 bg-amber-500/20 text-amber-400 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <Archive className="w-5 h-5" />
+                         </div>
+                         <div className="flex-1 text-left">
+                           <span className="block text-sm font-bold">{t('Purchase Invoices', 'Facturas Compra')}</span>
+                           <span className="block text-[10px] text-slate-500 font-black uppercase tracking-widest">{t('Inventory Records', 'Recibos Inventario')}</span>
+                         </div>
+                      </button>
+
+                      <button 
                         onClick={() => { setIsCreatingClient(true); setShowSideMenu(false); }}
                         className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white group transition-all"
                       >
@@ -1243,18 +1279,20 @@ const MainPOS: React.FC = () => {
                          </div>
                       </button>
 
-                      <button 
-                        onClick={() => { window.open(window.location.origin + '#kiosk', '_blank'); setShowSideMenu(false); }}
-                        className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white group transition-all"
-                      >
-                         <div className="w-10 h-10 bg-orange-500/20 text-orange-400 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <LayoutGrid className="w-5 h-5" />
-                         </div>
-                         <div className="flex-1 text-left">
-                           <span className="block text-sm font-bold">{t('Kiosk Mode', 'Modo Kiosko')}</span>
-                           <span className="block text-[10px] text-slate-500 font-black uppercase tracking-widest">{t('Self Service', 'Autoservicio')}</span>
-                         </div>
-                      </button>
+                      {['restaurant', 'combo'].includes(businessCategory?.id || '') && (
+                        <button 
+                          onClick={() => { window.open(window.location.origin + '#kiosk', '_blank'); setShowSideMenu(false); }}
+                          className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white group transition-all"
+                        >
+                           <div className="w-10 h-10 bg-orange-500/20 text-orange-400 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                              <LayoutGrid className="w-5 h-5" />
+                           </div>
+                           <div className="flex-1 text-left">
+                             <span className="block text-sm font-bold">{t('Kiosk Mode', 'Modo Kiosko')}</span>
+                             <span className="block text-[10px] text-slate-500 font-black uppercase tracking-widest">{t('Self Service', 'Autoservicio')}</span>
+                           </div>
+                        </button>
+                      )}
                       
                       <button 
                         onClick={() => { setIsReceiveMode(!isReceiveMode); setShowSideMenu(false); }}
@@ -1314,8 +1352,8 @@ const MainPOS: React.FC = () => {
       </AnimatePresence>
 
       {/* Main Container */}
-          {/* Main Top Header (Simplified for Retail/Wholesale/Grocery) */}
-          {['grocery', 'retail', 'bodega', 'hardware'].includes(businessCategory?.id || '') ? (
+          {/* Main Top Header (Simplified for Retail/Wholesale/Grocery/Combo) */}
+          {['grocery', 'retail', 'bodega', 'hardware', 'combo'].includes(businessCategory?.id || '') ? (
             <div className="h-16 bg-[#0f172a] border-b border-slate-800 flex items-center justify-between px-6 z-50 print:hidden shrink-0">
                <div className="flex items-center gap-6">
                  <button 
@@ -1337,7 +1375,31 @@ const MainPOS: React.FC = () => {
                  </div>
                </div>
 
+               {businessCategory?.id === 'combo' && (
+                  <div className="flex items-center gap-2 bg-slate-800 p-1 rounded-full border border-slate-700">
+                    <button 
+                      onClick={() => setComboView('grocery')}
+                      className={`px-4 py-1.5 rounded-full text-xs font-black tracking-widest flex items-center gap-2 transition-colors ${comboView === 'grocery' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      <ShoppingCart className="w-4 h-4" /> GROCERY
+                    </button>
+                    <button 
+                      onClick={() => setComboView('restaurant')}
+                      className={`px-4 py-1.5 rounded-full text-xs font-black tracking-widest flex items-center gap-2 transition-colors ${comboView === 'restaurant' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      <Utensils className="w-4 h-4" /> REST.
+                    </button>
+                  </div>
+               )}
+
                <div className="flex items-center gap-4">
+                  <button 
+                     onClick={() => window.open(window.location.origin + '#customer', '_blank')}
+                     className="hidden sm:flex items-center gap-2 bg-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl transition-all border border-slate-700 font-black text-[10px] uppercase tracking-widest"
+                  >
+                     <Monitor className="w-3 h-3" />
+                     DISPLAY
+                  </button>
                   {effectiveIsSuperAdmin && userStoreId !== 'SYSTEM' && (
                     <button 
                       onClick={() => setUserStoreId('SYSTEM')}
@@ -1378,13 +1440,20 @@ const MainPOS: React.FC = () => {
           )}
 
           <div className="flex-1 flex overflow-hidden print:hidden">
-            {['grocery', 'retail', 'bodega', 'hardware'].includes(businessCategory?.id || '') ? (
+            {(['grocery', 'retail', 'bodega', 'hardware'].includes(businessCategory?.id || '') || (businessCategory?.id === 'combo' && comboView === 'grocery')) ? (
               <GroceryView 
-                products={products}
-                categories={categories}
+                products={filteredProducts}
+                categories={filteredCategories}
                 cart={isReceiveMode ? receiveCart : cart}
                 onAddToCart={handleAddToCart}
                 onUpdateQuantity={handleUpdateQuantity}
+                onUpdateItem={(cartId, updates) => {
+                  if (isReceiveMode) {
+                    setReceiveCart(prev => prev.map(item => item.cartId === cartId ? { ...item, ...updates } : item));
+                  } else {
+                    setCart(prev => prev.map(item => item.cartId === cartId ? { ...item, ...updates } : item));
+                  }
+                }}
                 onRemoveItem={handleRemoveItem}
                 onCheckout={(details) => {
                   if (isReceiveMode && details) {
@@ -1428,7 +1497,7 @@ const MainPOS: React.FC = () => {
           <>
             <div className="flex-1 overflow-hidden">
               <Catalog 
-                products={products} 
+                products={filteredProducts} 
                 cart={isReceiveMode ? receiveCart : cart}
                 onAddToCart={handleAddToCart} 
                 onUpdateQuantity={handleUpdateQuantity}
@@ -1525,7 +1594,7 @@ const MainPOS: React.FC = () => {
                     <div className="p-2 space-y-2">
                       {seatItems.length > 0 ? (
                         seatItems.map((item) => (
-                          <div key={item.cartId} className="bg-gray-50/50 rounded-2xl p-4 flex items-start justify-between group hover:bg-gray-100 transition-all">
+                          <div key={item.cartId} onDoubleClick={() => setEditingCartItem(item)} className="bg-gray-50/50 rounded-2xl p-4 flex items-start justify-between group hover:bg-gray-100 transition-all cursor-pointer">
                             <div className="flex gap-4 flex-1">
                               <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center font-black text-gray-400 border border-gray-100 shadow-sm">
                                 {item.cantidad}
@@ -1759,6 +1828,26 @@ const MainPOS: React.FC = () => {
         />
       )}
 
+      {isViewingInventory && (
+        <InventoryListModal 
+          inventoryRecords={inventory}
+          onClose={() => setIsViewingInventory(false)}
+          onViewInventory={(i) => {
+            setSelectedInventoryRecord(i);
+          }}
+        />
+      )}
+
+      {selectedInventoryRecord && (
+        <div className="fixed inset-0 z-[120]">
+          <InvoiceDisplay 
+            invoice={selectedInventoryRecord}
+            onClose={() => setSelectedInventoryRecord(null)}
+            storeSettings={storeSettings}
+          />
+        </div>
+      )}
+
       {selectedOrder && (
         <InvoiceDisplay 
           order={selectedOrder}
@@ -1784,8 +1873,8 @@ const MainPOS: React.FC = () => {
             <InvoicePreview 
               cart={(lastOrderData?.articulos as any[]) || cart}
               storeSettings={storeSettings}
-              salesman={activeSalesman}
-              client={selectedClient}
+              salesman={(lastOrderData?.vendedor as any) ?? activeSalesman}
+              client={(lastOrderData?.cliente as any) ?? selectedClient}
               subtotal={lastOrderData?.subtotal ?? subtotal}
               taxAmount={lastOrderData?.tax ?? taxAmount}
               taxesApplied={lastOrderData?.taxesApplied ?? taxesApplied}
@@ -1800,8 +1889,8 @@ const MainPOS: React.FC = () => {
             <TicketPreview 
               cart={(lastOrderData?.articulos as any[]) || cart}
               storeSettings={storeSettings}
-              salesman={activeSalesman}
-              client={selectedClient}
+              salesman={(lastOrderData?.vendedor as any) ?? activeSalesman}
+              client={(lastOrderData?.cliente as any) ?? selectedClient}
               subtotal={lastOrderData?.subtotal ?? subtotal}
               taxAmount={lastOrderData?.tax ?? taxAmount}
               taxesApplied={lastOrderData?.taxesApplied ?? taxesApplied}
@@ -1815,6 +1904,22 @@ const MainPOS: React.FC = () => {
           )
         )}
       </div>
+      
+      {editingCartItem && (
+        <EditCartItemModal
+          item={editingCartItem}
+          categories={categories}
+          onClose={() => setEditingCartItem(null)}
+          onSave={(updatedItem) => {
+            if (isReceiveMode) {
+              setReceiveCart(prev => prev.map(item => item.cartId === updatedItem.cartId ? updatedItem : item));
+            } else {
+              setCart(prev => prev.map(item => item.cartId === updatedItem.cartId ? updatedItem : item));
+            }
+            setEditingCartItem(null);
+          }}
+        />
+      )}
     </div>
   );
 };

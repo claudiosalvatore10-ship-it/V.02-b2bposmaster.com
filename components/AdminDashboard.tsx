@@ -3,9 +3,9 @@ import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { GoogleGenAI } from "@google/genai";
-import InvoiceDisplay from '../src/components/InvoiceDisplay';
+import InvoiceDisplay from './InvoiceDisplay';
 import { TicketPreview, InvoicePreview } from './PrintPreviews';
-import ReceiveInventoryModal from '../src/components/ReceiveInventoryModal';
+import ReceiveInventoryModal from './ReceiveInventoryModal';
 import { CreateClientModal } from './CreateClientModal';
 import { CreatePromoModal } from './CreatePromoModal';
 import { Product, Client, Salesman, Order, Inventory, Category, Tax, Device, StoreSettings, Vendor, PurchaseOrder, BusinessCategory, Modifier, ModifierGroup, GlobalModifierGroup } from '../types';
@@ -300,7 +300,7 @@ const CreatePOModal = ({ vendors, products, onClose, onSave, isRestaurant }: any
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-gray-900">${Number(product.costo || 0).toFixed(2)}</p>
-                      <p className="text-xs text-gray-500">Stock: {product.stock}</p>
+                      <p className="text-xs text-gray-500">Stock: {Number.isInteger(product.stock) ? product.stock : Number(product.stock).toFixed(2)}</p>
                     </div>
                   </div>
                 ))}
@@ -401,12 +401,14 @@ const CreatePOModal = ({ vendors, products, onClose, onSave, isRestaurant }: any
 
 const formatStock = (stock: number, unitsPerBox?: number) => {
   const safeStock = stock ?? 0;
-  if (!unitsPerBox || unitsPerBox <= 1) return safeStock.toString();
+  if (!unitsPerBox || unitsPerBox <= 1) {
+    return Number.isInteger(safeStock) ? safeStock.toString() : Number(safeStock).toFixed(2);
+  }
   const boxes = Math.floor(safeStock / unitsPerBox);
   const loose = safeStock % unitsPerBox;
-  if (boxes === 0) return `${loose} units`;
+  if (boxes === 0) return `${Number.isInteger(loose) ? loose : loose.toFixed(2)} units`;
   if (loose === 0) return `${boxes} boxes`;
-  return `${boxes} boxes, ${loose} units`;
+  return `${boxes} boxes, ${Number.isInteger(loose) ? loose : loose.toFixed(2)} units`;
 };
 
 const ModifierGroupEditor = ({ onSave, onCancel, initialGroup }: { onSave: (group: ModifierGroup) => void, onCancel: () => void, initialGroup?: ModifierGroup }) => {
@@ -825,6 +827,15 @@ const CreateProductModal = ({ onClose, onSave, categories, initialProduct, globa
                 </select>
               </div>
             )}
+            {businessCategory?.id === 'combo' && (
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Module Type</label>
+                <select value={product.moduleType || 'grocery'} onChange={e => setProduct({...product, moduleType: e.target.value as 'grocery'|'restaurant'})} className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold">
+                  <option value="grocery">Grocery / Store</option>
+                  <option value="restaurant">Restaurant</option>
+                </select>
+              </div>
+            )}
             {(!businessCategory || businessCategory.enabledFields.precio) && (
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Price</label>
@@ -871,6 +882,12 @@ const CreateProductModal = ({ onClose, onSave, categories, initialProduct, globa
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">SKU</label>
                 <input type="text" value={product.sku || ''} onChange={e => setProduct({...product, sku: e.target.value})} className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold" />
+              </div>
+            )}
+            {(!businessCategory || businessCategory.enabledFields.serialNumber) && (
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Serial Number</label>
+                <input type="text" value={product.serialNumber || ''} onChange={e => setProduct({...product, serialNumber: e.target.value})} className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold" />
               </div>
             )}
             {(!businessCategory || businessCategory.enabledFields.lote) && (
@@ -1098,8 +1115,8 @@ const CreateProductModal = ({ onClose, onSave, categories, initialProduct, globa
   );
 };
 
-const CreateCategoryModal = ({ onClose, onSave, availableTaxes }: any) => {
-  const [category, setCategory] = useState({ nombre: '', taxIds: [] as string[] });
+const CreateCategoryModal = ({ onClose, onSave, availableTaxes, businessCategory }: any) => {
+  const [category, setCategory] = useState({ nombre: '', taxIds: [] as string[], quickAccess: false, moduleType: 'grocery' });
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1124,6 +1141,20 @@ const CreateCategoryModal = ({ onClose, onSave, availableTaxes }: any) => {
             <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1">Nombre</label>
             <input required type="text" placeholder="Nombre" value={category.nombre || ''} onChange={e => setCategory({...category, nombre: e.target.value})} className="w-full p-2 border rounded" />
           </div>
+
+          {businessCategory?.id === 'combo' && (
+            <div>
+              <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1">Module Type</label>
+              <select 
+                value={category.moduleType} 
+                onChange={e => setCategory({...category, moduleType: e.target.value})} 
+                className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+              >
+                <option value="grocery">Grocery / Store</option>
+                <option value="restaurant">Restaurant</option>
+              </select>
+            </div>
+          )}
           
           {availableTaxes && availableTaxes.length > 0 && (
             <div>
@@ -1143,6 +1174,20 @@ const CreateCategoryModal = ({ onClose, onSave, availableTaxes }: any) => {
               </div>
             </div>
           )}
+
+          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+            <div>
+              <p className="text-sm font-bold text-slate-800">Quick Access</p>
+              <p className="text-xs text-slate-500">Show items in the Quick Access panel by default</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCategory(prev => ({ ...prev, quickAccess: !prev.quickAccess }))}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${category.quickAccess ? 'bg-emerald-500' : 'bg-slate-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${category.quickAccess ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
 
           <div className="flex justify-end gap-2 mt-6">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
@@ -1210,10 +1255,54 @@ const CreateDeviceModal = ({ onClose, onSave }: any) => {
             <option value="IP">IP / Network</option>
             <option value="USB">USB</option>
           </select>
-          <input required type="text" placeholder="IP Address / Mac Address / USB Port" value={device.direccion || ''} onChange={e => setDevice({...device, direccion: e.target.value})} className="w-full p-2 border rounded-xl" />
+          <input required={device.conexion !== 'USB'} type="text" placeholder={device.conexion === 'USB' ? "USB / System Port (Optional)" : "IP Address / Mac Address"} value={device.direccion || ''} onChange={e => setDevice({...device, direccion: e.target.value})} className="w-full p-2 border rounded-xl" />
           <div className="flex justify-end gap-2 mt-6">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-xl font-bold text-sm">Cancel</button>
             <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700">Save Device</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const EditDeviceModal = ({ item, onClose, onSave }: any) => {
+  const [device, setDevice] = useState({ ...item });
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(device);
+  };
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[110] p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">Edit Device</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input required type="text" placeholder="Device Name (e.g., Main Printer)" value={device.nombre || ''} onChange={e => setDevice({...device, nombre: e.target.value})} className="w-full p-2 border rounded-xl" />
+          <select required value={device.tipo} onChange={e => setDevice({...device, tipo: e.target.value as any})} className="w-full p-2 border rounded-xl">
+            <option value="Printer">Printer</option>
+            <option value="Scale">Scale / Scanner</option>
+            <option value="Scanner">Barcode Scanner</option>
+            <option value="CreditCard">Credit Card Terminal</option>
+          </select>
+          {device.tipo === 'CreditCard' && (
+            <select required value={device.modelo} onChange={e => setDevice({...device, modelo: e.target.value})} className="w-full p-2 border rounded-xl">
+              <option value="">Select Terminal Model...</option>
+              <option value="PAX A80">PAX A80</option>
+              <option value="PAX A35">PAX A35</option>
+              <option value="PAX A920">PAX A920</option>
+              <option value="Other">Other Model</option>
+            </select>
+          )}
+          <select required value={device.conexion} onChange={e => setDevice({...device, conexion: e.target.value as any})} className="w-full p-2 border rounded-xl">
+            <option value="WIFI">WIFI</option>
+            <option value="Bluetooth">Bluetooth</option>
+            <option value="IP">IP / Network</option>
+            <option value="USB">USB</option>
+          </select>
+          <input required={device.conexion !== 'USB'} type="text" placeholder={device.conexion === 'USB' ? "USB / System Port (Optional)" : "IP Address / Mac Address"} value={device.direccion || ''} onChange={e => setDevice({...device, direccion: e.target.value})} className="w-full p-2 border rounded-xl" />
+          <div className="flex justify-end gap-2 mt-6">
+            <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-xl font-bold text-sm">Cancel</button>
+            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700">Update Device</button>
           </div>
         </form>
       </div>
@@ -1329,6 +1418,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isCreatingGlobalModifier, setIsCreatingGlobalModifier] = useState(false);
   const [isImportingFromLibrary, setIsImportingFromLibrary] = useState(false);
   const [isCreatingDevice, setIsCreatingDevice] = useState(false);
+  const [editingDevice, setEditingDevice] = useState<Device | null>(null);
   const [isAddingSupplier, setIsAddingSupplier] = useState(false);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isAddingPromo, setIsAddingPromo] = useState(false);
@@ -1915,6 +2005,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  const handleUpdateDevice = async (device: any) => {
+    try {
+      await setDoc(doc(db, 'devices', device.id), sanitizeForFirestore(device), { merge: true });
+      setDevices(devices.map(d => d.id === device.id ? device : d));
+      setEditingDevice(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `devices/${device.id}`);
+    }
+  };
+
   const handleSaveSalesman = async (salesman: Salesman) => {
     try {
       const salesmanWithStore = { ...salesman, storeId: storeSettings.id };
@@ -1957,11 +2057,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   React.useEffect(() => {
     if (storeSettings.businessCategory) {
       const unsub = onSnapshot(doc(db, 'system', 'config', 'rubros', storeSettings.businessCategory), (snapshot) => {
+        const fallback = DEFAULT_BUSINESS_CATEGORIES.find(c => c.id === storeSettings.businessCategory);
         if (snapshot.exists()) {
-          setBusinessCategory(snapshot.data() as BusinessCategory);
+          const data = snapshot.data();
+          setBusinessCategory({
+            ...fallback,
+            ...data,
+            enabledFields: {
+              ...(fallback?.enabledFields || {}),
+              ...(data.enabledFields || {})
+            }
+          } as BusinessCategory);
         } else {
           // Fallback if not seeded
-          const fallback = DEFAULT_BUSINESS_CATEGORIES.find(c => c.id === storeSettings.businessCategory);
           setBusinessCategory(fallback as BusinessCategory || null);
         }
       });
@@ -2003,7 +2111,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     if (!businessCategory) return allHeaders;
 
-    return allHeaders.filter(h => businessCategory.enabledFields[h.key as keyof typeof businessCategory.enabledFields]);
+    const filtered = allHeaders.filter(h => businessCategory.enabledFields[h.key as keyof typeof businessCategory.enabledFields]);
+    if (businessCategory?.id === 'combo') {
+      filtered.push({ key: 'moduleType', label: 'Module Type' });
+    }
+    return filtered;
   };
 
   const handleExportCSV = (data: any[], filename: string) => {
@@ -2293,6 +2405,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           'threshold': 'threshold', 'stock minimo': 'threshold', 'min stock': 'threshold', 'minstock': 'threshold',
           'descripcion': 'descripcion', 'description': 'descripcion', 'imagen url': 'imagenUrl', 'image url': 'imagenUrl', 'imagenurl': 'imagenUrl', 'imageurl': 'imagenUrl',
           'activo': 'activo', 'active': 'activo',
+          'module type': 'moduleType', 'module': 'moduleType', 'modulo': 'moduleType', 'tipo de modulo': 'moduleType',
           
           // Clients
           'vendedor': 'vendedorAsignado', 'salesman': 'vendedorAsignado', 'vendedor asignado': 'vendedorAsignado',
@@ -2375,6 +2488,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             if (!mappedItem.categoria) mappedItem.categoria = 'General';
             if (!mappedItem.imagenUrl) mappedItem.imagenUrl = 'https://picsum.photos/seed/product/200/200';
             
+            if (mappedItem.moduleType) {
+              const mt = String(mappedItem.moduleType).toLowerCase().trim();
+              if (mt.includes('rest') || mt.includes('food')) mappedItem.moduleType = 'restaurant';
+              else if (mt.includes('groce') || mt.includes('store') || mt.includes('groc')) mappedItem.moduleType = 'grocery';
+              else mappedItem.moduleType = 'grocery';
+            } else {
+              mappedItem.moduleType = 'grocery';
+            }
+            
             // Try to match existing product by UPC or SKU to avoid duplicates
             // Only match if UPC/SKU is not a placeholder or too short
             const isValidForMatch = (val: string) => val && val.length > 3 && !val.startsWith('UPC-');
@@ -2444,10 +2566,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           for (const catName of categoriesToAdd) {
             try {
+              const firstMatchingProduct = batch.find((p: any) => p.categoria === catName);
               const newCat: Category = {
                 id: `CAT-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                 storeId: storeSettings.id,
-                nombre: String(catName)
+                nombre: String(catName),
+                ...(businessCategory?.id === 'combo' && firstMatchingProduct?.moduleType ? { moduleType: firstMatchingProduct.moduleType as any } : {})
               };
               await setDoc(doc(db, 'categories', newCat.id), sanitizeForFirestore(newCat));
             } catch (e) {
@@ -3265,7 +3389,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 ...(!businessCategory || businessCategory.enabledFields.precio ? ['Precio'] : []),
                 ...(!businessCategory || businessCategory.enabledFields.costo ? ['Costo'] : []),
                 ...(!businessCategory || businessCategory.enabledFields.categoria ? ['Categoria'] : []),
+                ...(businessCategory?.id === 'combo' ? ['Module'] : []),
                 ...(!businessCategory || businessCategory.enabledFields.sku ? ['SKU'] : []),
+                ...(!businessCategory || businessCategory.enabledFields.serialNumber ? ['Serial'] : []),
                 ...(!businessCategory || businessCategory.enabledFields.lote ? ['Lote'] : []),
                 ...(!businessCategory || businessCategory.enabledFields.vencimiento ? ['Vencimiento'] : []),
                 ...(!businessCategory || businessCategory.enabledFields.stock ? ['Stock', 'Threshold'] : []),
@@ -3347,8 +3473,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   {(!businessCategory || businessCategory.enabledFields.categoria) && (
                     <td className="px-2 py-1"><EditableCell value={p.categoria} onChange={(v:any) => handleProductChange(p.id, 'categoria', v)} className="w-24" /></td>
                   )}
+                  {businessCategory?.id === 'combo' && (
+                    <td className="px-2 py-1">
+                      <select
+                        value={p.moduleType || 'grocery'}
+                        onChange={(e) => handleProductChange(p.id, 'moduleType', e.target.value)}
+                        className="p-1 border rounded text-xs font-bold bg-slate-50 w-24"
+                      >
+                        <option value="grocery">Grocery</option>
+                        <option value="restaurant">Rest.</option>
+                      </select>
+                    </td>
+                  )}
                   {(!businessCategory || businessCategory.enabledFields.sku) && (
                     <td className="px-2 py-1"><EditableCell value={p.sku} onChange={(v:any) => handleProductChange(p.id, 'sku', v)} className="text-xs w-20" /></td>
+                  )}
+                  {(!businessCategory || businessCategory.enabledFields.serialNumber) && (
+                    <td className="px-2 py-1"><EditableCell value={p.serialNumber} onChange={(v:any) => handleProductChange(p.id, 'serialNumber', v)} className="text-xs w-20" /></td>
                   )}
                   {(!businessCategory || businessCategory.enabledFields.lote) && (
                     <td className="px-2 py-1"><EditableCell value={p.lote} onChange={(v:any) => handleProductChange(p.id, 'lote', v)} className="text-xs w-20" /></td>
@@ -4060,7 +4201,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <>
             <ActionHeader title="Categories" onAdd={() => setIsCreatingCategory(true)} onClean={() => handleCleanAll('categories', setCategories, 'Categories')} />
             {renderTable(
-              ['ID', 'Nombre', 'Taxes', 'Fondo', 'Borde'],
+              ['ID', 'Nombre', 'Taxes', 'Fondo', 'Borde', 'Quick Access', ...(businessCategory?.id === 'combo' ? ['Module Type'] : [])],
               categories,
               (c: Category) => (
                 <>
@@ -4132,6 +4273,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       className="w-10 h-10 rounded cursor-pointer border-0 p-0"
                     />
                   </td>
+                  <td className="px-6 py-3">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await setDoc(doc(db, 'categories', c.id), { quickAccess: !c.quickAccess }, { merge: true });
+                        } catch (error) {
+                          handleFirestoreError(error, OperationType.UPDATE, `categories/${c.id}`);
+                        }
+                      }}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${c.quickAccess ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${c.quickAccess ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </td>
+                  {businessCategory?.id === 'combo' && (
+                    <td className="px-6 py-3">
+                      <select
+                        value={c.moduleType || 'grocery'}
+                        onChange={async (e) => {
+                          try {
+                            await setDoc(doc(db, 'categories', c.id), { moduleType: e.target.value }, { merge: true });
+                          } catch (error) {
+                            handleFirestoreError(error, OperationType.UPDATE, `categories/${c.id}`);
+                          }
+                        }}
+                        className="p-1 border rounded text-xs font-bold bg-slate-50"
+                      >
+                        <option value="grocery">Grocery</option>
+                        <option value="restaurant">Restaurant</option>
+                      </select>
+                    </td>
+                  )}
                 </>
               )
             )}
@@ -4407,6 +4580,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                        <Tag className="w-6 h-6" />}
                     </div>
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => setEditingDevice(device)}
+                        className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
                       <button 
                         onClick={() => {
                           setConfirmation({
@@ -4715,7 +4894,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
 
                 {/* Tips Settings */}
-                {businessCategory?.id === 'restaurant' && (
+                {['restaurant', 'combo'].includes(businessCategory?.id || '') && (
                   <div className="pt-4 border-t border-gray-100">
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 mb-4">
                       <div>
@@ -4752,210 +4931,212 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 )}
 
                 {/* Kiosk Settings */}
-                <div className="pt-4 border-t border-gray-100">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-orange-50 text-orange-600 rounded-lg">
-                      <LayoutGrid className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-black text-orange-800">{t('Kiosk Payments', 'Pagos en Kiosko')}</h4>
-                      <p className="text-xs text-orange-600 font-bold">{t('Configure which payment methods are available to customers.', 'Configura qué métodos de pago están disponibles para los clientes.')}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                      <div>
-                        <h4 className="font-bold text-gray-900">{t('Enable Cash', 'Habilitar Efectivo')}</h4>
-                        <p className="text-xs text-gray-500 mt-1">{t('Allow payment at counter', 'Permitir pago en mostrador')}</p>
+                {['restaurant', 'combo'].includes(businessCategory?.id || '') && (
+                  <div className="pt-4 border-t border-gray-100">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-2 bg-orange-50 text-orange-600 rounded-lg">
+                        <LayoutGrid className="w-5 h-5" />
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
+                      <div>
+                        <h4 className="text-sm font-black text-orange-800">{t('Kiosk Payments', 'Pagos en Kiosko')}</h4>
+                        <p className="text-xs text-orange-600 font-bold">{t('Configure which payment methods are available to customers.', 'Configura qué métodos de pago están disponibles para los clientes.')}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                        <div>
+                          <h4 className="font-bold text-gray-900">{t('Enable Cash', 'Habilitar Efectivo')}</h4>
+                          <p className="text-xs text-gray-500 mt-1">{t('Allow payment at counter', 'Permitir pago en mostrador')}</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            className="sr-only peer"
+                            checked={storeSettings.kioskCashEnabled !== false}
+                            onChange={(e) => handleStoreSettingsChange('kioskCashEnabled', e.target.checked)}
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                        </label>
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                        <div>
+                          <h4 className="font-bold text-gray-900">{t('Enable Card', 'Habilitar Tarjeta')}</h4>
+                          <p className="text-xs text-gray-500 mt-1">{t('Allow payment with credit/debit', 'Permitir pago con crédito/débito')}</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            className="sr-only peer"
+                            checked={storeSettings.kioskCardEnabled !== false}
+                            onChange={(e) => handleStoreSettingsChange('kioskCardEnabled', e.target.checked)}
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Kiosk Media Section - Redesigned */}
+                    <div className="mt-8 bg-pink-50/30 p-8 rounded-[2rem] border border-pink-100">
+                      <div className="flex items-center gap-4 mb-8">
+                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-pink-600 shadow-sm border border-pink-100">
+                          <Hand className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="text-xl font-black text-pink-900 uppercase tracking-tight">Imágenes y Videos del Kiosko</h4>
+                          <p className="text-sm text-pink-600 font-bold">Sube imágenes o enlaza videos MP4 para la pantalla de inicio.</p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-4 mb-8">
                         <input 
-                          type="checkbox" 
-                          className="sr-only peer"
-                          checked={storeSettings.kioskCashEnabled !== false}
-                          onChange={(e) => handleStoreSettingsChange('kioskCashEnabled', e.target.checked)}
+                          type="file"
+                          id="kiosk-media-upload"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                const url = event.target?.result as string;
+                                const currentMedia = storeSettings.kioskMedia || [];
+                                handleStoreSettingsChange('kioskMedia', [...currentMedia, { url, type: 'image', duration: 5 }]);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                            // Reset input
+                            e.target.value = '';
+                          }}
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
-                      </label>
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                      <div>
-                        <h4 className="font-bold text-gray-900">{t('Enable Card', 'Habilitar Tarjeta')}</h4>
-                        <p className="text-xs text-gray-500 mt-1">{t('Allow payment with credit/debit', 'Permitir pago con crédito/débito')}</p>
+                        <button 
+                          onClick={() => document.getElementById('kiosk-media-upload')?.click()}
+                          className="flex items-center gap-2 bg-pink-600 text-white px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-wider hover:bg-pink-700 transition-all shadow-lg shadow-pink-200"
+                        >
+                          <Upload className="w-5 h-5" />
+                          Subir Imagen
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const currentMedia = storeSettings.kioskMedia || [];
+                            handleStoreSettingsChange('kioskMedia', [...currentMedia, { url: '', type: 'video', duration: 10 }]);
+                          }}
+                          className="flex items-center gap-2 bg-white text-pink-600 border-2 border-pink-100 px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-wider hover:bg-pink-50 transition-all"
+                        >
+                          <Plus className="w-5 h-5" />
+                          Añadir URL de Video
+                        </button>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          className="sr-only peer"
-                          checked={storeSettings.kioskCardEnabled !== false}
-                          onChange={(e) => handleStoreSettingsChange('kioskCardEnabled', e.target.checked)}
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                      </label>
-                    </div>
-                  </div>
 
-                  {/* Kiosk Media Section - Redesigned */}
-                  <div className="mt-8 bg-pink-50/30 p-8 rounded-[2rem] border border-pink-100">
-                    <div className="flex items-center gap-4 mb-8">
-                      <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-pink-600 shadow-sm border border-pink-100">
-                        <Hand className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h4 className="text-xl font-black text-pink-900 uppercase tracking-tight">Imágenes y Videos del Kiosko</h4>
-                        <p className="text-sm text-pink-600 font-bold">Sube imágenes o enlaza videos MP4 para la pantalla de inicio.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-4 mb-8">
-                      <input 
-                        type="file"
-                        id="kiosk-media-upload"
-                        className="hidden"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (event) => {
-                              const url = event.target?.result as string;
-                              const currentMedia = storeSettings.kioskMedia || [];
-                              handleStoreSettingsChange('kioskMedia', [...currentMedia, { url, type: 'image', duration: 5 }]);
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                          // Reset input
-                          e.target.value = '';
-                        }}
-                      />
-                      <button 
-                        onClick={() => document.getElementById('kiosk-media-upload')?.click()}
-                        className="flex items-center gap-2 bg-pink-600 text-white px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-wider hover:bg-pink-700 transition-all shadow-lg shadow-pink-200"
-                      >
-                        <Upload className="w-5 h-5" />
-                        Subir Imagen
-                      </button>
-                      <button 
-                        onClick={() => {
-                          const currentMedia = storeSettings.kioskMedia || [];
-                          handleStoreSettingsChange('kioskMedia', [...currentMedia, { url: '', type: 'video', duration: 10 }]);
-                        }}
-                        className="flex items-center gap-2 bg-white text-pink-600 border-2 border-pink-100 px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-wider hover:bg-pink-50 transition-all"
-                      >
-                        <Plus className="w-5 h-5" />
-                        Añadir URL de Video
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                      {(storeSettings.kioskMedia || []).map((media, idx) => (
-                        <div key={idx} className="bg-white rounded-[2rem] border border-pink-100 overflow-hidden shadow-sm hover:shadow-md transition-all group">
-                          <div className="relative h-48 bg-gray-100">
-                            {media.type === 'video' ? (
-                              <div className="w-full h-full flex flex-col items-center justify-center bg-purple-50 text-purple-600 p-4">
-                                <CreditCard className="w-12 h-12 mb-2" />
-                                <span className="text-[10px] font-black uppercase tracking-widest">Video URL</span>
-                                <input 
-                                  type="text"
-                                  value={media.url}
-                                  placeholder="URL del Video (.mp4)"
-                                  className="w-full mt-2 bg-white/50 border-none rounded-lg px-2 py-1 text-[10px] font-bold text-center outline-none"
-                                  onChange={(e) => {
-                                    const newMedia = [...(storeSettings.kioskMedia || [])];
-                                    newMedia[idx].url = e.target.value;
-                                    handleStoreSettingsChange('kioskMedia', newMedia);
-                                  }}
-                                />
-                              </div>
-                            ) : (
-                              <>
-                                {media.url ? (
-                                  <img src={media.url} className="w-full h-full object-cover" alt="Preview" />
-                                ) : (
-                                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 relative group/upload">
-                                    <button 
-                                      onClick={() => document.getElementById(`kiosk-media-upload-${idx}`)?.click()}
-                                      className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 hover:bg-pink-50 transition-colors z-10"
-                                    >
-                                      <Upload className="w-12 h-12 mb-2 text-gray-400 group-hover/upload:text-pink-500 transition-colors" />
-                                      <span className="text-[10px] font-black uppercase text-gray-400 group-hover/upload:text-pink-500">Toca para subir</span>
-                                    </button>
-                                    <input 
-                                      type="file"
-                                      id={`kiosk-media-upload-${idx}`}
-                                      className="hidden"
-                                      accept="image/*"
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
-                                          const reader = new FileReader();
-                                          reader.onload = (event) => {
-                                            const url = event.target?.result as string;
-                                            const newMedia = [...(storeSettings.kioskMedia || [])];
-                                            newMedia[idx].url = url;
-                                            handleStoreSettingsChange('kioskMedia', newMedia);
-                                          };
-                                          reader.readAsDataURL(file);
-                                        }
-                                        e.target.value = '';
-                                      }}
-                                    />
-                                    <div className="absolute bottom-2 left-0 right-0 z-20 px-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {(storeSettings.kioskMedia || []).map((media, idx) => (
+                          <div key={idx} className="bg-white rounded-[2rem] border border-pink-100 overflow-hidden shadow-sm hover:shadow-md transition-all group">
+                            <div className="relative h-48 bg-gray-100">
+                              {media.type === 'video' ? (
+                                <div className="w-full h-full flex flex-col items-center justify-center bg-purple-50 text-purple-600 p-4">
+                                  <CreditCard className="w-12 h-12 mb-2" />
+                                  <span className="text-[10px] font-black uppercase tracking-widest">Video URL</span>
+                                  <input 
+                                    type="text"
+                                    value={media.url}
+                                    placeholder="URL del Video (.mp4)"
+                                    className="w-full mt-2 bg-white/50 border-none rounded-lg px-2 py-1 text-[10px] font-bold text-center outline-none"
+                                    onChange={(e) => {
+                                      const newMedia = [...(storeSettings.kioskMedia || [])];
+                                      newMedia[idx].url = e.target.value;
+                                      handleStoreSettingsChange('kioskMedia', newMedia);
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <>
+                                  {media.url ? (
+                                    <img src={media.url} className="w-full h-full object-cover" alt="Preview" />
+                                  ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 relative group/upload">
+                                      <button 
+                                        onClick={() => document.getElementById(`kiosk-media-upload-${idx}`)?.click()}
+                                        className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 hover:bg-pink-50 transition-colors z-10"
+                                      >
+                                        <Upload className="w-12 h-12 mb-2 text-gray-400 group-hover/upload:text-pink-500 transition-colors" />
+                                        <span className="text-[10px] font-black uppercase text-gray-400 group-hover/upload:text-pink-500">Toca para subir</span>
+                                      </button>
                                       <input 
-                                        type="text"
-                                        value={media.url}
-                                        placeholder="O pega URL de Imagen"
-                                        className="w-full bg-white/80 border-none rounded-lg px-2 py-1 text-[10px] font-bold text-center outline-none shadow-sm focus:ring-2 focus:ring-pink-400 focus:bg-white transition-all cursor-text"
-                                        onClick={(e) => e.stopPropagation()}
+                                        type="file"
+                                        id={`kiosk-media-upload-${idx}`}
+                                        className="hidden"
+                                        accept="image/*"
                                         onChange={(e) => {
-                                          const newMedia = [...(storeSettings.kioskMedia || [])];
-                                          newMedia[idx].url = e.target.value;
-                                          handleStoreSettingsChange('kioskMedia', newMedia);
+                                          const file = e.target.files?.[0];
+                                          if (file) {
+                                            const reader = new FileReader();
+                                            reader.onload = (event) => {
+                                              const url = event.target?.result as string;
+                                              const newMedia = [...(storeSettings.kioskMedia || [])];
+                                              newMedia[idx].url = url;
+                                              handleStoreSettingsChange('kioskMedia', newMedia);
+                                            };
+                                            reader.readAsDataURL(file);
+                                          }
+                                          e.target.value = '';
                                         }}
                                       />
+                                      <div className="absolute bottom-2 left-0 right-0 z-20 px-4">
+                                        <input 
+                                          type="text"
+                                          value={media.url}
+                                          placeholder="O pega URL de Imagen"
+                                          className="w-full bg-white/80 border-none rounded-lg px-2 py-1 text-[10px] font-bold text-center outline-none shadow-sm focus:ring-2 focus:ring-pink-400 focus:bg-white transition-all cursor-text"
+                                          onClick={(e) => e.stopPropagation()}
+                                          onChange={(e) => {
+                                            const newMedia = [...(storeSettings.kioskMedia || [])];
+                                            newMedia[idx].url = e.target.value;
+                                            handleStoreSettingsChange('kioskMedia', newMedia);
+                                          }}
+                                        />
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
-                              </>
-                            )}
+                                  )}
+                                </>
+                              )}
+                              
+                              <button 
+                                onClick={() => {
+                                  const newMedia = (storeSettings.kioskMedia || []).filter((_, i) => i !== idx);
+                                  handleStoreSettingsChange('kioskMedia', newMedia);
+                                }}
+                                className="absolute top-3 right-3 p-2 bg-red-500 text-white rounded-xl shadow-sm hover:bg-red-600 transition-all focus:ring-2 focus:ring-red-400 z-30"
+                                title="Eliminar medio"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                             
-                            <button 
-                              onClick={() => {
-                                const newMedia = (storeSettings.kioskMedia || []).filter((_, i) => i !== idx);
-                                handleStoreSettingsChange('kioskMedia', newMedia);
-                              }}
-                              className="absolute top-3 right-3 p-2 bg-red-500 text-white rounded-xl shadow-sm hover:bg-red-600 transition-all focus:ring-2 focus:ring-red-400 z-30"
-                              title="Eliminar medio"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <div className="p-4 flex items-center justify-between bg-white border-t border-pink-50">
+                              <span className="text-[10px] font-black text-pink-900 uppercase tracking-widest">Duración (Seg)</span>
+                              <input 
+                                type="number"
+                                value={media.duration || 5}
+                                className="w-16 bg-pink-50/50 border border-pink-100 rounded-xl px-3 py-1 text-right text-xs font-black text-pink-600 focus:ring-2 focus:ring-pink-200 outline-none transition-all"
+                                onChange={(e) => {
+                                  const newMedia = [...(storeSettings.kioskMedia || [])];
+                                  newMedia[idx].duration = parseInt(e.target.value) || 5;
+                                  handleStoreSettingsChange('kioskMedia', newMedia);
+                                }}
+                              />
+                            </div>
                           </div>
-                          
-                          <div className="p-4 flex items-center justify-between bg-white border-t border-pink-50">
-                            <span className="text-[10px] font-black text-pink-900 uppercase tracking-widest">Duración (Seg)</span>
-                            <input 
-                              type="number"
-                              value={media.duration || 5}
-                              className="w-16 bg-pink-50/50 border border-pink-100 rounded-xl px-3 py-1 text-right text-xs font-black text-pink-600 focus:ring-2 focus:ring-pink-200 outline-none transition-all"
-                              onChange={(e) => {
-                                const newMedia = [...(storeSettings.kioskMedia || [])];
-                                newMedia[idx].duration = parseInt(e.target.value) || 5;
-                                handleStoreSettingsChange('kioskMedia', newMedia);
-                              }}
-                            />
+                        ))}
+                        {(storeSettings.kioskMedia || []).length === 0 && (
+                          <div className="col-span-full p-12 text-center bg-white rounded-[2rem] border-2 border-dashed border-pink-100">
+                            <p className="text-pink-300 font-black uppercase text-xs tracking-[0.2em]">Sube tu primera imagen o video para comenzar</p>
                           </div>
-                        </div>
-                      ))}
-                      {(storeSettings.kioskMedia || []).length === 0 && (
-                        <div className="col-span-full p-12 text-center bg-white rounded-[2rem] border-2 border-dashed border-pink-100">
-                          <p className="text-pink-300 font-black uppercase text-xs tracking-[0.2em]">Sube tu primera imagen o video para comenzar</p>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -5036,6 +5217,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   />
                   <p className="text-[10px] text-gray-400 mt-1 italic">
                     Percentage added to the total when paying with Credit Card. Default is 4%.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Enable "Cash Discount" Message</label>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer"
+                      checked={storeSettings.enableCashDiscount !== false}
+                      onChange={(e) => handleStoreSettingsChange('enableCashDiscount', e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                  <p className="text-[10px] text-gray-400 mt-1 italic">
+                    Toggle to display "You saved X by paying cash" on invoices. Checked by default.
                   </p>
                 </div>
               </div>
@@ -5342,7 +5538,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="flex-1 overflow-y-auto p-4 md:p-8 print:p-0 print:overflow-visible flex flex-col items-center">
               {(() => {
                 const isWholesale = businessCategory?.enabledFields?.printA4 || businessCategory?.name?.toLowerCase().includes('wholesale') || storeSettings.nombre?.toLowerCase().includes('wholesale');
-                const displayFormat = (businessCategory?.id === 'restaurant' && !isWholesale) ? 'ticket' :
+                const displayFormat = (['restaurant', 'combo'].includes(businessCategory?.id || '') && !isWholesale) ? 'ticket' :
                                      (businessCategory?.enabledFields?.printA4 ? 'invoice' : 
                                      (businessCategory?.enabledFields?.thermal80mm ? 'ticket' : 
                                      (isWholesale ? 'invoice' : (storeSettings.printFormat || 'ticket'))));
@@ -5403,7 +5599,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <CreatePOModal 
           vendors={vendors} 
           products={products} 
-          isRestaurant={businessCategory?.name?.toLowerCase().includes('restaurant') || storeSettings.nombre?.toLowerCase().includes('restaurant') || storeSettings.businessCategory === 'restaurant'}
+          isRestaurant={businessCategory?.name?.toLowerCase().includes('restaurant') || storeSettings.nombre?.toLowerCase().includes('restaurant') || storeSettings.businessCategory === 'restaurant' || storeSettings.businessCategory === 'combo'}
           onClose={() => setIsCreatingPO(false)} 
           onSave={(newPO: PurchaseOrder) => {
             const poWithStore = { ...newPO, storeId: storeSettings.id };
@@ -5448,7 +5644,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
       {isCreatingCategory && (
-        <CreateCategoryModal onClose={() => setIsCreatingCategory(false)} onSave={handleSaveCategory} availableTaxes={taxes} />
+        <CreateCategoryModal onClose={() => setIsCreatingCategory(false)} onSave={handleSaveCategory} availableTaxes={taxes} businessCategory={businessCategory} />
       )}
       {/* Create Tax Modal */}
       {isCreatingTax && (
@@ -5457,6 +5653,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* Create Device Modal */}
       {isCreatingDevice && (
         <CreateDeviceModal onClose={() => setIsCreatingDevice(false)} onSave={handleSaveDevice} />
+      )}
+      {/* Edit Device Modal */}
+      {editingDevice && (
+        <EditDeviceModal item={editingDevice} onClose={() => setEditingDevice(null)} onSave={handleUpdateDevice} />
       )}
       {/* Create Salesman Modal */}
       {isCreatingSalesman && (

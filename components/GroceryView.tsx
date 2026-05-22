@@ -10,6 +10,7 @@ import {
   MinusCircle, PlusCircle, X
 } from 'lucide-react';
 import { Product, CartItem, StoreSettings, Category, Tax, BusinessCategory, Salesman, Vendor } from '../types';
+import { EditCartItemModal } from './EditCartItemModal';
 
 interface GroceryViewProps {
   products: Product[];
@@ -17,6 +18,7 @@ interface GroceryViewProps {
   cart: CartItem[];
   onAddToCart: (product: Product, quantity: number) => void;
   onUpdateQuantity: (cartId: string, quantity: number) => void;
+  onUpdateItem?: (cartId: string, updates: Partial<CartItem>) => void;
   onRemoveItem: (cartId: string) => void;
   onCheckout: (details?: { invoiceNumber: string, checkRef: string, vendorId: string }) => void;
   storeSettings: StoreSettings;
@@ -32,6 +34,7 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
   cart,
   onAddToCart,
   onUpdateQuantity,
+  onUpdateItem,
   onRemoveItem,
   onCheckout,
   storeSettings,
@@ -47,6 +50,7 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
   const [selectedVendorId, setSelectedVendorId] = useState<string>('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [checkRef, setCheckRef] = useState('');
+  const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
 
   const handleNumpadPress = (value: string) => {
     if (value === 'C') {
@@ -110,7 +114,12 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
     setNumpadValue((current + amount).toFixed(2));
   };
 
-  const featuredItems = products.filter(p => !selectedCategory || p.categoria === selectedCategory);
+  const quickAccessCategories = categories.filter(c => c.quickAccess).map(c => c.nombre);
+
+  const featuredItems = products.filter(p => {
+    if (selectedCategory) return p.categoria === selectedCategory;
+    return quickAccessCategories.length > 0 ? quickAccessCategories.includes(p.categoria) : true;
+  });
 
   const subtotal = cart.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
   const tax = subtotal * 0.16;
@@ -191,13 +200,23 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 10 }}
-                  className="flex justify-between items-start group py-2 border-b border-dashed border-slate-100 last:border-none"
+                  onDoubleClick={() => setEditingCartItem(item)}
+                  className="flex justify-between items-start group py-2 border-b border-dashed border-slate-100 last:border-none cursor-pointer hover:bg-slate-50 transition-colors rounded-lg px-2 -mx-2"
                 >
                   <div className="flex-1 pr-2">
                     <h4 className="font-bold text-slate-800 text-sm leading-tight">{item.nombre}</h4>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
                       {item.cantidad.toFixed(2)} x ${item.precio.toFixed(2)}
                     </p>
+                    {(!businessCategory || businessCategory.enabledFields.serialNumber) && onUpdateItem && (
+                      <input 
+                        type="text"
+                        placeholder="Serial Number"
+                        value={item.serialNumber || ''}
+                        onChange={(e) => onUpdateItem(item.cartId, { serialNumber: e.target.value })}
+                        className="mt-1 w-full text-xs p-1 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-blue-500"
+                      />
+                    )}
                   </div>
                   <div className="text-right flex flex-col items-end">
                     <p className="font-black text-slate-900">${(item.precio * item.cantidad).toFixed(2)}</p>
@@ -253,6 +272,8 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
                    return;
                  }
                  onCheckout({ invoiceNumber, checkRef, vendorId: selectedVendorId });
+                 setInvoiceNumber('');
+                 setCheckRef('');
                }}
                className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-xl py-4 flex items-center justify-center gap-2 font-black tracking-widest uppercase transition-all shadow-lg shadow-blue-200 mt-2 active:scale-95"
              >
@@ -565,6 +586,25 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
            </div>
         </div>
       </div>
+      
+      {editingCartItem && (
+        <EditCartItemModal
+          item={editingCartItem}
+          categories={categories}
+          onClose={() => setEditingCartItem(null)}
+          onSave={(updatedItem) => {
+            if (onUpdateItem) {
+              onUpdateItem(updatedItem.cartId, {
+                nombre: updatedItem.nombre,
+                precio: updatedItem.precio,
+                categoria: updatedItem.categoria,
+                cantidad: updatedItem.cantidad
+              });
+            }
+            setEditingCartItem(null);
+          }}
+        />
+      )}
     </div>
   );
 };

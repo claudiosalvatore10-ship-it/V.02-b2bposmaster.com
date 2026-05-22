@@ -1,4 +1,5 @@
 import React from 'react';
+import Barcode from 'react-barcode';
 import { CartItem, StoreSettings, Salesman, Client } from '../types';
 
 const numberToWords = (num: number): string => {
@@ -45,6 +46,7 @@ interface PreviewProps {
   creditTerm?: string;
   dueDate?: string;
   splits?: { amount: number; method: string }[];
+  invoiceId?: string;
 }
 
 export const KitchenTicketPreview: React.FC<{
@@ -134,8 +136,14 @@ export const TicketPreview: React.FC<PreviewProps> = ({
   totalCredit,
   creditSurcharge,
   paymentMethod,
-  splits
-}) => (
+  splits,
+  invoiceId
+}) => {
+  const displayInvoiceId = Object.prototype.toString.call(invoiceId) === '[object String]' && String(invoiceId).length > 0
+    ? String(invoiceId).toUpperCase() 
+    : `TKT-${Math.floor(Math.random() * 1000000)}`;
+
+  return (
   <div className="w-full max-w-[320px] bg-white p-6 font-mono text-[11px] shadow-inner border border-gray-100 rounded-sm relative overflow-hidden">
     {/* Receipt Decoration */}
     <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200"></div>
@@ -166,6 +174,11 @@ export const TicketPreview: React.FC<PreviewProps> = ({
             <div className="flex justify-between items-start">
               <div className="flex-1 pr-2">
                 <span className="font-bold">{item.cantidad}X</span> {item.nombre.toUpperCase()}
+                {item.serialNumber && (
+                  <div className="text-[9px] text-gray-500 font-bold tracking-wide mt-0.5 ml-6">
+                    S/N: {item.serialNumber}
+                  </div>
+                )}
               </div>
               <div className="flex gap-3 text-right">
                 <span className="font-bold text-gray-900">${itemTotal.toFixed(2)}</span>
@@ -244,22 +257,30 @@ export const TicketPreview: React.FC<PreviewProps> = ({
       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">THANK YOU FOR YOUR VISIT!</p>
       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">PLEASE COME AGAIN</p>
       
-      {paymentMethod === 'Cash' ? (
-        <div className="mt-4 pt-2 border-t border-dashed border-gray-300">
-          <p className="text-[10px] font-black uppercase tracking-widest text-gray-800">
-            USTED AHORRÓ ${(totalCredit - totalCash).toFixed(2)} PAGANDO EN EFECTIVO
-          </p>
-        </div>
-      ) : (
-        <div className="mt-4 pt-2 border-t border-dashed border-gray-300">
-          <p className="text-[10px] font-black uppercase tracking-widest text-gray-800">
-            PAGUE EN EFECTIVO Y AHORRE ${(totalCredit - totalCash).toFixed(2)}
-          </p>
-        </div>
+      {storeSettings.enableCashDiscount !== false && (
+        paymentMethod === 'Cash' ? (
+          <div className="mt-4 pt-2 border-t border-dashed border-gray-300">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-800">
+              USTED AHORRÓ ${(totalCredit - totalCash).toFixed(2)} PAGANDO EN EFECTIVO
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 pt-2 border-t border-dashed border-gray-300">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-800">
+              PAGUE EN EFECTIVO Y AHORRE ${(totalCredit - totalCash).toFixed(2)}
+            </p>
+          </div>
+        )
       )}
+
+      <div className="mt-6 flex justify-center">
+        <Barcode value={displayInvoiceId.length > 20 ? displayInvoiceId.substring(0, 12) : displayInvoiceId} width={1.5} height={30} fontSize={10} margin={0} displayValue={false} />
+      </div>
+      <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-widest text-center">{displayInvoiceId.length > 20 ? displayInvoiceId.substring(0, 12) : displayInvoiceId}</p>
     </div>
   </div>
-);
+  );
+};
 
 export const InvoicePreview: React.FC<PreviewProps> = ({
   cart,
@@ -275,8 +296,14 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
   paymentMethod = 'Pending',
   creditTerm = 'Due on Receipt',
   dueDate = new Date().toLocaleDateString(),
-  splits
-}) => (
+  splits,
+  invoiceId
+}) => {
+  const displayInvoiceId = Object.prototype.toString.call(invoiceId) === '[object String]' && String(invoiceId).length > 0
+    ? String(invoiceId).toUpperCase() 
+    : `INV-${Math.floor(Math.random() * 1000000)}`;
+
+  return (
   <div className="w-full bg-white p-6 lg:p-8 text-gray-900 shadow-inner border border-gray-100 rounded-sm print:p-0 print:shadow-none print:border-none font-sans text-sm">
     {/* Header Section */}
     <div className="flex justify-between items-start mb-6">
@@ -299,9 +326,12 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
       <div className="text-right">
         <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tighter mb-2">INVOICE</h2>
         <div className="space-y-0.5 text-xs font-bold leading-tight">
-          <p className="text-gray-700">Invoice #: <span className="font-black text-gray-900">INV-{Math.floor(Math.random() * 1000000)}</span></p>
+          <p className="text-gray-700">Invoice #: <span className="font-black text-gray-900">{displayInvoiceId.length > 20 ? displayInvoiceId.substring(0, 12) : displayInvoiceId}</span></p>
           <p className="text-gray-700">Date: <span className="font-black text-gray-900">{new Date().toLocaleDateString()}</span></p>
           <p className="text-gray-700">Status: <span className="font-black text-gray-900">{paymentMethod === 'Pending' ? 'Pending' : 'Pagado'}</span></p>
+        </div>
+        <div className="mt-2 flex justify-end">
+          <Barcode value={displayInvoiceId.length > 20 ? displayInvoiceId.substring(0, 12) : displayInvoiceId} width={1.5} height={30} fontSize={10} margin={0} displayValue={false} />
         </div>
       </div>
     </div>
@@ -334,10 +364,11 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
     <table className="w-full mb-6 text-sm">
       <thead>
         <tr className="border-b-2 border-gray-200 text-left">
+          <th className="py-1.5 text-xs font-black text-gray-900 uppercase w-24">Barcode</th>
           <th className="py-1.5 text-xs font-black text-gray-900 uppercase">Item</th>
-          <th className="py-1.5 text-xs font-black text-gray-900 uppercase text-center">Qty</th>
-          <th className="py-1.5 text-xs font-black text-gray-900 uppercase text-center">Price</th>
-          <th className="py-1.5 text-xs font-black text-gray-900 uppercase text-right">Total</th>
+          <th className="py-1.5 text-xs font-black text-gray-900 uppercase text-center w-12">Qty</th>
+          <th className="py-1.5 text-xs font-black text-gray-900 uppercase text-center w-20">Price</th>
+          <th className="py-1.5 text-xs font-black text-gray-900 uppercase text-right w-24">Total</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100">
@@ -349,9 +380,21 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
           const itemTotal = unitPrice * itemQuantity;
           return (
             <tr key={idx}>
-              <td className="py-2">
+              <td className="py-2 pr-2 align-top">
+                {item.upc || item.sku ? (
+                  <div className="flex flex-col items-start gap-1">
+                    <Barcode value={item.upc || item.sku || ''} width={1} height={20} fontSize={8} margin={0} displayValue={false} />
+                    <span className="text-[9px] text-gray-500 font-bold leading-none uppercase">{item.upc || item.sku}</span>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-gray-400 font-bold">N/A</span>
+                )}
+              </td>
+              <td className="py-2 align-top">
                 <p className="font-black text-gray-900 text-sm uppercase leading-tight">{item.nombre}</p>
-                <p className="text-[10px] text-gray-500 font-bold leading-tight">UPC: {item.sku || '7410003710555'}</p>
+                {item.serialNumber && (
+                  <p className="text-[10px] text-gray-600 font-bold leading-tight">S/N: {item.serialNumber}</p>
+                )}
                 {item.promo && item.promo.type === 'combo' && item.promo.items && item.promo.items.map((promoItem, pIdx) => (
                   <p key={`p-${pIdx}`} className="text-[10px] text-gray-700 font-bold italic ml-2 leading-tight">
                     • {promoItem.cantidad}x {promoItem.nombre}
@@ -363,9 +406,9 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
                   </p>
                 ))}
               </td>
-              <td className="py-2 text-center font-black text-gray-900">{item.cantidad}</td>
-              <td className="py-2 text-center font-bold text-gray-700">${unitPrice.toFixed(2)}</td>
-              <td className="py-2 text-right font-black text-gray-900">${itemTotal.toFixed(2)}</td>
+              <td className="py-2 text-center font-black text-gray-900 align-top">{item.cantidad}</td>
+              <td className="py-2 text-center font-bold text-gray-700 align-top">${unitPrice.toFixed(2)}</td>
+              <td className="py-2 text-right font-black text-gray-900 align-top">${itemTotal.toFixed(2)}</td>
             </tr>
           );
         })}
@@ -432,18 +475,20 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
 
     <div className="text-center mb-6">
       <p className="text-xs font-bold text-gray-800">Thank you for your business!</p>
-      {paymentMethod === 'Cash' ? (
-        <div className="mt-4 pt-4 border-t-2 border-dashed border-gray-200">
-          <p className="text-sm font-black uppercase tracking-widest text-green-700">
-            USTED AHORRÓ ${(totalCredit - totalCash).toFixed(2)} PAGANDO EN EFECTIVO
-          </p>
-        </div>
-      ) : (
-        <div className="mt-4 pt-4 border-t-2 border-dashed border-gray-200">
-          <p className="text-sm font-black uppercase tracking-widest text-gray-800">
-            PAGUE EN EFECTIVO Y AHORRE ${(totalCredit - totalCash).toFixed(2)}
-          </p>
-        </div>
+      {storeSettings.enableCashDiscount !== false && (
+        paymentMethod === 'Cash' ? (
+          <div className="mt-4 pt-4 border-t-2 border-dashed border-gray-200">
+            <p className="text-sm font-black uppercase tracking-widest text-green-700">
+              USTED AHORRÓ ${(totalCredit - totalCash).toFixed(2)} PAGANDO EN EFECTIVO
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 pt-4 border-t-2 border-dashed border-gray-200">
+            <p className="text-sm font-black uppercase tracking-widest text-gray-800">
+              PAGUE EN EFECTIVO Y AHORRE ${(totalCredit - totalCash).toFixed(2)}
+            </p>
+          </div>
+        )
       )}
     </div>
 
@@ -497,4 +542,5 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
       </div>
     )}
   </div>
-);
+  );
+};

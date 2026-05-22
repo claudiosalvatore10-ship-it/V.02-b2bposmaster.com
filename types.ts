@@ -30,6 +30,7 @@ export interface StoreSettings {
   kioskCashEnabled?: boolean;
   kioskCardEnabled?: boolean;
   kioskMedia?: { url: string; type: 'image' | 'video'; duration?: number }[];
+  enableCashDiscount?: boolean;
 }
 
 export interface SuperAdminItem {
@@ -81,6 +82,8 @@ export interface BusinessCategory {
     thermal80mm: boolean;
     printA4: boolean;
     modifiers: boolean;
+    serialNumber?: boolean;
+    kiosk?: boolean;
   };
 }
 
@@ -123,6 +126,7 @@ export interface Product {
   sku: string;
   lote?: string;
   vencimiento?: string;
+  serialNumber?: string;
   stock: number;
   componenteActivo?: string;
   laboratorio?: string;
@@ -135,6 +139,7 @@ export interface Product {
   oculto?: boolean;
   modifierGroups?: ModifierGroup[];
   promo?: PromoConfig;
+  moduleType?: 'grocery' | 'restaurant';
 }
 
 export interface Client {
@@ -307,6 +312,8 @@ export interface Category {
   taxIds?: string[];
   color?: string;
   borderColor?: string;
+  quickAccess?: boolean;
+  moduleType?: 'grocery' | 'restaurant';
 }
 
 export interface Tax {

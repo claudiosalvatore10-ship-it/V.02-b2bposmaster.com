@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
-import { Product, StoreSettings, Vendor, Inventory } from '../../types';
+import { Product, StoreSettings, Vendor, Inventory } from '../types';
 import { Archive, X, Search, Tag, Building2, Package, ShoppingCart } from 'lucide-react';
-import { QuantityControl } from '../../components/QuantityControl';
+import { QuantityControl } from './QuantityControl';
 import InvoiceDisplay from './InvoiceDisplay';
 
 interface ReceiveInventoryModalProps {
@@ -183,6 +183,36 @@ const ReceiveInventoryModal: React.FC<ReceiveInventoryModalProps> = ({ vendors, 
                 className="p-4 bg-white border border-gray-200 rounded-[1.5rem] font-black text-gray-800 focus:ring-4 focus:ring-blue-100 outline-none shadow-sm w-40"
               />
             </div>
+            
+            {!isSimpleMode && (
+              <>
+                <div className="flex flex-col">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1">Payment Method</label>
+                  <select 
+                    value={metodoPago} 
+                    onChange={e => setMetodoPago(e.target.value as any)} 
+                    className="p-4 bg-white border border-gray-200 rounded-[1.5rem] font-black text-gray-800 focus:ring-4 focus:ring-blue-100 outline-none shadow-sm min-w-[140px]"
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Check">Check</option>
+                    <option value="Credit">Credit / Transfer</option>
+                  </select>
+                </div>
+
+                {(metodoPago === 'Check' || metodoPago === 'Credit') && (
+                  <div className="flex flex-col">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1">Ref / Check #</label>
+                    <input 
+                      type="text" 
+                      value={checkNumber} 
+                      onChange={e => setCheckNumber(e.target.value)}
+                      placeholder="e.g. 1045"
+                      className="p-4 bg-white border border-gray-200 rounded-[1.5rem] font-black text-gray-800 focus:ring-4 focus:ring-blue-100 outline-none shadow-sm w-40"
+                    />
+                  </div>
+                )}
+              </>
+            )}
 
             <button 
               onClick={handleSave}
