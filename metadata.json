@@ -1,0 +1,8 @@
+{
+  "name": "V.02 b2bposmaster.com",
+  "description": "B2B wholesale medicine ordering app for salespeople. Features catalog, cart, invoicing, and admin dashboard.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": []
+}

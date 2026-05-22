@@ -1,0 +1,256 @@
+{
+  "entities": {
+    "StoreSettings": {
+      "title": "StoreSettings",
+      "description": "Global settings for the store.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "licenseKey": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "nombre": { "type": "string" },
+        "direccion": { "type": "string" },
+        "email": { "type": "string" },
+        "telefono": { "type": "string" },
+        "logoUrl": { "type": "string" }
+      }
+    },
+    "Product": {
+      "title": "Product",
+      "description": "A product available for sale.",
+      "type": "object",
+      "properties": {
+        "storeId": { "type": "string" },
+        "upc": { "type": "string" },
+        "nombre": { "type": "string" },
+        "precio": { "type": "number" },
+        "costo": { "type": "number" },
+        "categoria": { "type": "string" },
+        "sku": { "type": "string" },
+        "lote": { "type": "string" },
+        "vencimiento": { "type": "string" },
+        "stock": { "type": "number" },
+        "componenteActivo": { "type": "string" },
+        "laboratorio": { "type": "string" },
+        "unidad": { "type": "string" },
+        "imagenUrl": { "type": "string" },
+        "descuento": { "type": "number" }
+      }
+    },
+    "Client": {
+      "title": "Client",
+      "description": "A customer who places orders.",
+      "type": "object",
+      "properties": {
+        "storeId": { "type": "string" },
+        "nombre": { "type": "string" },
+        "telefono": { "type": "string" },
+        "direccion": { "type": "string" },
+        "ciudad": { "type": "string" },
+        "estado": { "type": "string" },
+        "cp": { "type": "string" },
+        "email": { "type": "string" },
+        "vendedorAsignado": { "type": "string" },
+        "terminosCredito": { "type": "string" }
+      }
+    },
+    "User": {
+      "title": "User",
+      "description": "A user of the system.",
+      "type": "object",
+      "properties": {
+        "storeId": { "type": "string" },
+        "nombre": { "type": "string" },
+        "apellido": { "type": "string" },
+        "codigo": { "type": "string" },
+        "email": { "type": "string" },
+        "telefono": { "type": "string" },
+        "direccion": { "type": "string" },
+        "ciudad": { "type": "string" },
+        "estado": { "type": "string" },
+        "cp": { "type": "string" },
+        "taxId": { "type": "string" },
+        "activo": { "type": "boolean" },
+        "pin": { "type": "string" },
+        "role": { "type": "string" }
+      }
+    },
+    "Salesman": {
+      "title": "Salesman",
+      "description": "A field agent who takes orders.",
+      "type": "object",
+      "properties": {
+        "storeId": { "type": "string" },
+        "nombre": { "type": "string" },
+        "apellido": { "type": "string" },
+        "codigo": { "type": "string" },
+        "email": { "type": "string" },
+        "telefono": { "type": "string" },
+        "direccion": { "type": "string" },
+        "ciudad": { "type": "string" },
+        "estado": { "type": "string" },
+        "cp": { "type": "string" },
+        "taxId": { "type": "string" },
+        "activo": { "type": "boolean" },
+        "pin": { "type": "string" },
+        "role": { "type": "string" }
+      }
+    },
+    "Order": {
+      "title": "Order",
+      "description": "An order placed by a customer or salesman.",
+      "type": "object",
+      "properties": {
+        "storeId": { "type": "string" },
+        "proveedor": { "type": "string" },
+        "fecha": { "type": "number" },
+        "factura": { "type": "string" },
+        "articulos": { "type": "string" },
+        "total": { "type": "number" },
+        "estado": { "type": "string" },
+        "clienteId": { "type": "string" },
+        "vendedorId": { "type": "string" },
+        "metodoPago": { "type": "string" },
+        "checkNumber": { "type": "string" },
+        "montoLetras": { "type": "string" },
+        "terminosCredito": { "type": "string" },
+        "amountTendered": { "type": "number" },
+        "changeDue": { "type": "number" },
+        "checkDate": { "type": "string" },
+        "creditCardType": { "type": "string" },
+        "creditCardLast4": { "type": "string" },
+        "tax": { "type": "number" },
+        "taxRate": { "type": "number" },
+        "bills": { "type": "string" }
+      }
+    },
+    "Vendor": {
+      "title": "Vendor",
+      "description": "A supplier for products.",
+      "type": "object",
+      "properties": {
+        "storeId": { "type": "string" },
+        "nombre": { "type": "string" },
+        "contacto": { "type": "string" },
+        "telefono": { "type": "string" },
+        "email": { "type": "string" },
+        "direccion": { "type": "string" },
+        "terminos": { "type": "string" }
+      }
+    },
+    "PurchaseOrder": {
+      "title": "PurchaseOrder",
+      "description": "An order placed to a vendor.",
+      "type": "object",
+      "properties": {
+        "storeId": { "type": "string" },
+        "vendorId": { "type": "string" },
+        "fechaCreacion": { "type": "number" },
+        "fechaEsperada": { "type": "number" },
+        "fechaRecepcion": { "type": "number" },
+        "estado": { "type": "string" },
+        "articulos": { "type": "string" },
+        "total": { "type": "number" },
+        "notas": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "checkNumber": { "type": "string" }
+      }
+    },
+    "Inventory": {
+      "title": "Inventory",
+      "description": "Inventory records.",
+      "type": "object",
+      "properties": {
+        "storeId": { "type": "string" },
+        "proveedor": { "type": "string" },
+        "fecha": { "type": "number" },
+        "factura": { "type": "string" },
+        "articulos": { "type": "number" },
+        "total": { "type": "number" },
+        "estado": { "type": "string" }
+      }
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product category.",
+      "type": "object",
+      "properties": {
+        "storeId": { "type": "string" },
+        "nombre": { "type": "string" }
+      }
+    },
+    "Tax": {
+      "title": "Tax",
+      "description": "Tax rate.",
+      "type": "object",
+      "properties": {
+        "storeId": { "type": "string" },
+        "nombre": { "type": "string" },
+        "porcentaje": { "type": "number" }
+      }
+    },
+    "Device": {
+      "title": "Device",
+      "description": "Device configuration.",
+      "type": "object",
+      "properties": {
+        "storeId": { "type": "string" },
+        "nombre": { "type": "string" },
+        "tipo": { "type": "string" },
+        "conexion": { "type": "string" },
+        "direccion": { "type": "string" },
+        "activo": { "type": "boolean" }
+      }
+    }
+  },
+  "firestore": {
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/StoreSettings" },
+      "description": "Store settings."
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Products."
+    },
+    "/clients/{clientId}": {
+      "schema": { "$ref": "#/entities/Client" },
+      "description": "Clients."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Users."
+    },
+    "/salesmen/{salesmanId}": {
+      "schema": { "$ref": "#/entities/Salesman" },
+      "description": "Salesmen."
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Orders."
+    },
+    "/vendors/{vendorId}": {
+      "schema": { "$ref": "#/entities/Vendor" },
+      "description": "Vendors."
+    },
+    "/purchaseOrders/{poId}": {
+      "schema": { "$ref": "#/entities/PurchaseOrder" },
+      "description": "Purchase Orders."
+    },
+    "/inventory/{inventoryId}": {
+      "schema": { "$ref": "#/entities/Inventory" },
+      "description": "Inventory."
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Categories."
+    },
+    "/taxes/{taxId}": {
+      "schema": { "$ref": "#/entities/Tax" },
+      "description": "Taxes."
+    },
+    "/devices/{deviceId}": {
+      "schema": { "$ref": "#/entities/Device" },
+      "description": "Devices."
+    }
+  }
+}

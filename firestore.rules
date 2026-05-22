@@ -1,0 +1,179 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitives
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-@\\.]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    function isSuperAdmin() {
+      return request.auth != null && 
+        (
+          request.auth.uid == "F4xyXnzoj8OhHBVDMd1DbU0odwh1" ||
+          ("email" in request.auth.token && request.auth.token.email == "claudio.salvatore10@gmail.com") ||
+          ("email" in request.auth.token && request.auth.token.email == "aristatell@gmail.com")
+        );
+    }
+    
+    function getUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    
+    function hasUserDoc() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getStoreId() {
+      return hasUserDoc() ? getUserDoc().data.storeId : null;
+    }
+
+    function isAdmin() {
+      return isSuperAdmin() || (isSignedIn() && hasUserDoc() && getUserDoc().data.role == 'admin');
+    }
+
+    function isSalesman() {
+      return isAdmin() || (isSignedIn() && hasUserDoc() && (getUserDoc().data.role == 'salesman' || getUserDoc().data.role == 'user'));
+    }
+
+    function isStoreUser(storeId) {
+      return isSuperAdmin() || (isSignedIn() && hasUserDoc() && getUserDoc().data.storeId == storeId);
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidStoreSettings(data) {
+      return data.keys().hasAll(['id', 'nombre']) && data.keys().size() <= 10 &&
+             data.id is string && data.id.size() > 0 &&
+             data.nombre is string && data.nombre.size() > 0;
+    }
+
+    match /settings/{storeId} {
+      allow get: if isValidId(storeId);
+      allow list: if isStoreUser(resource.data.id) || isSuperAdmin();
+      allow create: if isSignedIn();
+      allow update: if isValidId(storeId) && isAdmin() && (storeId == getStoreId() || isSuperAdmin()) && (isSuperAdmin() || !incoming().diff(existing()).affectedKeys().hasAny(['licenseKey', 'isActive', 'subscriptionAmount']));
+      allow delete: if isSuperAdmin();
+    }
+
+    match /products/{productId} {
+      allow get: if isValidId(productId);
+      allow list: if isStoreUser(resource.data.storeId) || isSuperAdmin();
+      allow create: if isValidId(productId) && isSignedIn();
+      allow update: if isValidId(productId) && isAdmin() && isStoreUser(existing().get('storeId', null)) && (isSuperAdmin() || incoming().diff(existing()).affectedKeys().hasOnly(['upc', 'nombre', 'precio', 'costo', 'categoria', 'sku', 'lote', 'vencimiento', 'stock', 'componenteActivo', 'laboratorio', 'unidad', 'imagenUrl', 'descuento', 'isServicio', 'status']));
+      allow delete: if isValidId(productId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+    }
+
+    match /clients/{clientId} {
+      allow get: if isValidId(clientId) && isSalesman() && isStoreUser(existing().get('storeId', null));
+      allow list: if isSalesman() && isStoreUser(resource.data.storeId);
+      allow create: if isValidId(clientId) && isSignedIn();
+      allow update: if isValidId(clientId) && isSalesman() && isStoreUser(existing().get('storeId', null));
+      allow delete: if isValidId(clientId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+    }
+
+    match /users/{userId} {
+      // Users can read themselves, superadmins can read all, admins can read within their store
+      allow get: if isSignedIn() && (
+        userId == request.auth.uid || 
+        isSuperAdmin() || 
+        (resource != null && "email" in resource.data && resource.data.email == request.auth.token.email) ||
+        (isAdmin() && resource != null && getUserDoc().data.get('storeId', null) == resource.data.get('storeId', null))
+      );
+      allow list: if isSignedIn();
+        
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /salesmen/{salesmanId} {
+      allow get: if isValidId(salesmanId) && isStoreUser(existing().get('storeId', null));
+      allow list: if isStoreUser(resource.data.storeId);
+      allow create: if isValidId(salesmanId) && isSignedIn();
+      allow update: if isValidId(salesmanId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+      allow delete: if isValidId(salesmanId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+    }
+
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && isSalesman() && isStoreUser(existing().get('storeId', null));
+      allow list: if isSalesman() && isStoreUser(resource.data.storeId);
+      allow create: if isValidId(orderId) && (isSalesman() || incoming().get('vendedorId', null) == 'kiosk');
+      allow update: if isValidId(orderId) && isSalesman() && isStoreUser(existing().get('storeId', null));
+      allow delete: if isValidId(orderId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+    }
+
+    match /vendors/{vendorId} {
+      allow get: if isValidId(vendorId) && isSalesman() && isStoreUser(existing().get('storeId', null));
+      allow list: if isSalesman() && isStoreUser(resource.data.storeId);
+      allow create: if isValidId(vendorId) && isSignedIn();
+      allow update: if isValidId(vendorId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+      allow delete: if isValidId(vendorId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+    }
+
+    match /purchaseOrders/{poId} {
+      allow get: if isValidId(poId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+      allow list: if isAdmin() && isStoreUser(resource.data.storeId);
+      allow create: if isValidId(poId) && isAdmin();
+      allow update: if isValidId(poId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+      allow delete: if isValidId(poId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+    }
+
+    match /inventory/{inventoryId} {
+      allow get: if isValidId(inventoryId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+      allow list: if isAdmin() && isStoreUser(resource.data.storeId);
+      allow create: if isValidId(inventoryId) && isAdmin();
+      allow update: if isValidId(inventoryId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+      allow delete: if isValidId(inventoryId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+    }
+
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId);
+      allow list: if isStoreUser(resource.data.storeId) || isSuperAdmin();
+      allow create: if isValidId(categoryId) && isSignedIn();
+      allow update: if isValidId(categoryId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+      allow delete: if isValidId(categoryId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+    }
+
+    match /taxes/{taxId} {
+      allow get: if isValidId(taxId) && isStoreUser(existing().get('storeId', getStoreId()));
+      allow list: if isStoreUser(resource.data.storeId);
+      allow create: if isValidId(taxId) && isSignedIn();
+      allow update: if isValidId(taxId) && isAdmin() && isStoreUser(existing().get('storeId', getStoreId()));
+      allow delete: if isValidId(taxId) && isAdmin() && isStoreUser(existing().get('storeId', getStoreId()));
+    }
+
+    match /devices/{deviceId} {
+      allow get: if isValidId(deviceId) && isSalesman() && isStoreUser(existing().get('storeId', null));
+      allow list: if isSalesman() && isStoreUser(resource.data.storeId);
+      allow create: if isValidId(deviceId) && isSignedIn();
+      allow update: if isValidId(deviceId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+      allow delete: if isValidId(deviceId) && isAdmin() && isStoreUser(existing().get('storeId', null));
+    }
+
+    match /kitchenTickets/{ticketId} {
+      allow read: if isStoreUser(resource.data.storeId) || isSuperAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && isStoreUser(existing().get('storeId', null));
+    }
+
+    match /system/{docId} {
+      allow read: if isValidId(docId);
+      allow write: if isSuperAdmin();
+    }
+    match /system/{docId}/{allPaths=**} {
+      allow read: if isValidId(docId);
+      allow write: if isSuperAdmin();
+    }
+    match /demoRequests/{requestId} {
+      allow create: if true; // anyone can create a demo request
+      allow read, update, delete: if isSuperAdmin();
+    }
+  }
+}
