@@ -1,0 +1,103 @@
+604-              precio: parseFloat(row['Price'] || row['Precio']) || 0
+605-            });
+606-          }
+607-        });
+608-
+609-        setModifierGroups(prev => [...prev, ...Array.from(groupsMap.values())]);
+610-        toast.success('Modifiers imported successfully');
+611-      } catch (error) {
+612-        console.error("Error importing modifiers:", error);
+613-        toast.error('Failed to import modifiers. Check file format.');
+614-      }
+615-    };
+616-    reader.readAsBinaryString(file);
+617-    e.target.value = '';
+618-  };
+619-
+620-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+621-    const file = e.target.files?.[0];
+622-    if (file) {
+623-      // Basic check for file size before processing
+624-      if (file.size > 2 * 1024 * 1024) { // 2MB
+625-        toast.error("Image too large. Please select an image under 2MB.");
+626-        return;
+627-      }
+628-
+629-      const reader = new FileReader();
+630-      reader.onloadend = () => {
+631-        const img = new Image();
+632-        img.onload = () => {
+633-          // Resize image to max 400x400 while maintaining aspect ratio
+634-          const MAX_WIDTH = 400;
+635-          const MAX_HEIGHT = 400;
+636-          let width = img.width;
+637-          let height = img.height;
+638-
+639-          if (width > height) {
+640-            if (width > MAX_WIDTH) {
+641-              height *= MAX_WIDTH / width;
+642-              width = MAX_WIDTH;
+643-            }
+644-          } else {
+645-            if (height > MAX_HEIGHT) {
+646-              width *= MAX_HEIGHT / height;
+647-              height = MAX_HEIGHT;
+648-            }
+649-          }
+650-
+651-          const canvas = document.createElement('canvas');
+652-          canvas.width = width;
+653-          canvas.height = height;
+654:          const ctx = canvas.getContext('2d');
+--
+3354-              
+3355-              <div className="relative">
+3356-                <input 
+3357-                  type="file" 
+3358-                  multiple 
+3359-                  accept="image/*" 
+3360-                  onChange={(e) => {
+3361-                    const files = Array.from(e.target.files || []);
+3362-                    if (files.length === 0) return;
+3363-
+3364-                    showToast(`Procesando ${files.length} imágenes...`, 'info');
+3365-                    
+3366-                    let matchedCount = 0;
+3367-                    const promises = files.map((file: File) => {
+3368-                      return new Promise<void>((resolve) => {
+3369-                        const fileName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+3370-                        const matchedProduct = products.find(p => 
+3371-                          (p.sku && p.sku.toLowerCase() === fileName.toLowerCase()) || 
+3372-                          (p.upc && p.upc.toLowerCase() === fileName.toLowerCase()) ||
+3373-                          (p.nombre.toLowerCase() === fileName.toLowerCase())
+3374-                        );
+3375-
+3376-                        if (!matchedProduct) {
+3377-                          resolve();
+3378-                          return;
+3379-                        }
+3380-
+3381-                        // Also verify size before converting 
+3382-                        if (file.size > 2 * 1024 * 1024) {
+3383-                           resolve();
+3384-                           return; // Skip images > 2MB
+3385-                        }
+3386-
+3387-                        const reader = new FileReader();
+3388-                        reader.onloadend = () => {
+3389-                          const img = new Image();
+3390-                          img.onload = async () => {
+3391-                            const MAX_WIDTH = 400;
+3392-                            const MAX_HEIGHT = 400;
+3393-                            let width = img.width;
+3394-                            let height = img.height;
+3395-
+3396-                            if (width > height) {
+3397-                              if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+3398-                            } else {
+3399-                              if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+3400-                            }
+3401-
+3402-                            const canvas = document.createElement('canvas');
+3403-                            canvas.width = width; canvas.height = height;
+3404:                            const ctx = canvas.getContext('2d');

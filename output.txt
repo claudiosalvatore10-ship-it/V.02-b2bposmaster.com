@@ -1,0 +1,95 @@
+3278-          (p.sku || '').toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+3279-          (p.categoria || '').toLowerCase().includes(productSearchQuery.toLowerCase())
+3280-        );
+3281-        return (
+3282-          <>
+3283:            <ActionHeader 
+3284-              title="Products Catalog" 
+3285-              extraActions={
+3286-                <>
+3287-                  <button 
+3288-                    onClick={() => setIsAddingPromo(true)} 
+--
+3624-          (c.telefono || '').toLowerCase().includes(clientSearchQuery.toLowerCase()) ||
+3625-          (c.ciudad || '').toLowerCase().includes(clientSearchQuery.toLowerCase())
+3626-        );
+3627-        return (
+3628-          <>
+3629:            <ActionHeader 
+3630-              title="Clients Directory" 
+3631-              onAdd={() => setIsCreatingClient(true)} 
+3632-              onExport 
+3633-              exportData={clients} 
+3634-              exportName="Clients" 
+--
+3697-          )
+3698-        );
+3699-        const salesmenLabel = storeSettings.salesmenLabel || 'Usuarios';
+3700-        return (
+3701-          <>
+3702:            <ActionHeader 
+3703-              title={`${salesmenLabel} Team`} 
+3704-              onAdd={() => setIsCreatingSalesman(true)} 
+3705-              onExport 
+3706-              exportData={salesmen} 
+3707-              exportName={salesmenLabel} 
+--
+3769-          (v.contacto || '').toLowerCase().includes(supplierSearchQuery.toLowerCase()) ||
+3770-          (v.email || '').toLowerCase().includes(supplierSearchQuery.toLowerCase())
+3771-        );
+3772-        return (
+3773-          <>
+3774:            <ActionHeader 
+3775-              title="Suppliers Directory" 
+3776-              onAdd={() => setIsAddingSupplier(true)} 
+3777-              onExport 
+3778-              exportData={vendors} 
+3779-              exportName="Suppliers" 
+--
+4151-        const filteredGroups = globalModifierGroups.filter(g => 
+4152-          g.nombre.toLowerCase().includes(modifierSearchQuery.toLowerCase())
+4153-        );
+4154-        return (
+4155-          <>
+4156:            <ActionHeader 
+4157-              title="Modifiers Library" 
+4158-              onAdd={() => setIsCreatingGlobalModifier(true)} 
+4159-              onExport 
+4160-              exportData={globalModifierGroups} 
+4161-              exportName="Modifiers_Library" 
+--
+4234-        );
+4235-      }
+4236-      case 'Categories':
+4237-        return (
+4238-          <>
+4239:            <ActionHeader title="Categories" onAdd={() => setIsCreatingCategory(true)} onClean={() => handleCleanAll('categories', setCategories, 'Categories')} />
+4240-            {renderTable(
+4241-              ['ID', 'Nombre', 'Taxes', 'Fondo', 'Borde', 'Quick Access', ...(businessCategory?.id === 'combo' ? ['Module Type'] : [])],
+4242-              categories,
+4243-              (c: Category) => (
+4244-                <>
+--
+4582-          }, 3000);
+4583-        };
+4584-
+4585-        return (
+4586-          <>
+4587:            <ActionHeader 
+4588-              title="Printers & Devices" 
+4589-              onAdd={() => setIsCreatingDevice(true)} 
+4590-              onClean={() => handleCleanAll('devices', setDevices, 'Devices')}
+4591-            />
+4592-            
+--
+5349-                )}
+5350-              </div>
+5351-            </div>
+5352-
+5353-            <div>
+5354:              <ActionHeader title="Taxes" onAdd={() => setIsCreatingTax(true)} />
+5355-              {renderTable(
+5356-                ['ID', 'Nombre', 'Porcentaje', 'Acciones'],
+5357-                taxes,
+5358-                (t: Tax) => (
+5359-                  <>

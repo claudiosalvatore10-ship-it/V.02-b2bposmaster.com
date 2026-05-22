@@ -10,7 +10,7 @@ import { CreateClientModal } from './CreateClientModal';
 import { CreatePromoModal } from './CreatePromoModal';
 import { Product, Client, Salesman, Order, Inventory, Category, Tax, Device, StoreSettings, Vendor, PurchaseOrder, BusinessCategory, Modifier, ModifierGroup, GlobalModifierGroup } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_CLIENTS, INITIAL_SALESMEN, INITIAL_CATEGORIES, INITIAL_TAXES, INITIAL_DEVICES, INITIAL_VENDORS, DEFAULT_BUSINESS_CATEGORIES } from '../constants';
-import { LayoutDashboard, Package, Users, Briefcase, Tags, Settings, ShoppingCart, Archive, ArrowLeft, Plus, Download, Upload, Printer as PrinterIcon, Trophy, TrendingUp, Menu, X, Truck, FileText, Search, Mail, Trash2, CheckCircle, Building2, Tag, RefreshCw, Sparkles, ShieldCheck, ListFilter, Copy, CreditCard, LayoutGrid, Hand } from 'lucide-react';
+import { LayoutDashboard, Package, Users, Briefcase, Tags, Settings, ShoppingCart, Archive, ArrowLeft, Plus, Download, Upload, Printer as PrinterIcon, Trophy, TrendingUp, Menu, X, Truck, FileText, Search, Mail, Trash2, CheckCircle, Building2, Tag, RefreshCw, Sparkles, ShieldCheck, ListFilter, Copy, CreditCard, LayoutGrid, Hand, Grid, ChefHat } from 'lucide-react';
 import { doc, deleteDoc, setDoc, writeBatch, collection, getDocs, updateDoc, query, where, addDoc, onSnapshot } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import Papa from 'papaparse';
@@ -538,7 +538,7 @@ const ModifierGroupEditor = ({ onSave, onCancel, initialGroup }: { onSave: (grou
   );
 };
 
-const CreateProductModal = ({ onClose, onSave, categories, initialProduct, globalImages = [], businessCategory, globalModifierGroups = [] }: any) => {
+const CreateProductModal = ({ onClose, onSave, categories, initialProduct, globalImages = [], businessCategory, globalModifierGroups = [], initialModuleType }: any) => {
     const [product, setProduct] = useState<Partial<Product>>({
     upc: '',
     boxBarcode: '',
@@ -547,6 +547,7 @@ const CreateProductModal = ({ onClose, onSave, categories, initialProduct, globa
     precio: 0,
     costo: 0,
     categoria: categories[0]?.nombre || '',
+    moduleType: initialModuleType || 'grocery',
     sku: '',
     lote: '',
     vencimiento: '',
@@ -1418,11 +1419,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isCreatingGlobalModifier, setIsCreatingGlobalModifier] = useState(false);
   const [isImportingFromLibrary, setIsImportingFromLibrary] = useState(false);
   const [isCreatingDevice, setIsCreatingDevice] = useState(false);
+  const [importTargetModule, setImportTargetModule] = useState<'grocery' | 'restaurant' | null>(null);
   const [editingDevice, setEditingDevice] = useState<Device | null>(null);
   const [isAddingSupplier, setIsAddingSupplier] = useState(false);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isAddingPromo, setIsAddingPromo] = useState(false);
   const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [productAdminComboView, setProductAdminComboView] = useState<'grocery' | 'restaurant'>('grocery');
   const [clientSearchQuery, setClientSearchQuery] = useState('');
   const [salesmanSearchQuery, setSalesmanSearchQuery] = useState('');
   const [supplierSearchQuery, setSupplierSearchQuery] = useState('');
@@ -1657,7 +1660,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setDoc(doc(db, 'products', id), { [field]: safeValue }, { merge: true }).catch(error => {
       handleFirestoreError(error, OperationType.UPDATE, `products/${id}`);
     });
-    // Optimistic update
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, [field]: safeValue } : p));
   };
 
   const handleClientChange = (id: string, field: keyof Client, value: any) => {
@@ -2274,7 +2277,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     showToast(`${filename} template downloaded!`, 'success');
   };
 
-  const handleImportClick = () => {
+  const handleImportClick = (moduleTarget?: 'grocery' | 'restaurant' | React.MouseEvent) => {
+    if (typeof moduleTarget === 'string' && (moduleTarget === 'grocery' || moduleTarget === 'restaurant')) {
+      setImportTargetModule(moduleTarget);
+    } else if (activeTab === 'Products') {
+      setImportTargetModule(productAdminComboView);
+    } else {
+      setImportTargetModule(null);
+    }
     console.log("Import button clicked. Active tab:", activeTab);
     if (!fileInputRef.current) {
       console.error("fileInputRef is null!");
@@ -2488,7 +2498,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             if (!mappedItem.categoria) mappedItem.categoria = 'General';
             if (!mappedItem.imagenUrl) mappedItem.imagenUrl = 'https://picsum.photos/seed/product/200/200';
             
-            if (mappedItem.moduleType) {
+            if (importTargetModule) {
+              mappedItem.moduleType = importTargetModule;
+            } else if (mappedItem.moduleType) {
               const mt = String(mappedItem.moduleType).toLowerCase().trim();
               if (mt.includes('rest') || mt.includes('food')) mappedItem.moduleType = 'restaurant';
               else if (mt.includes('groce') || mt.includes('store') || mt.includes('groc')) mappedItem.moduleType = 'grocery';
@@ -3050,9 +3062,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
         {onExport && (
           <div className="flex gap-2">
-            <button onClick={handleImportClick} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-bold transition">
-              <Upload className="w-4 h-4" /> Import (Excel/CSV)
-            </button>
+            {(businessCategory?.id === 'combo' && (title === 'Products Catalog' || activeTab === 'Products')) ? (
+              <div className="relative group/import">
+                <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-bold transition">
+                  <Upload className="w-4 h-4" /> Import By Module
+                </button>
+                <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-2 opacity-0 invisible group-hover/import:opacity-100 group-hover/import:visible transition-all z-50">
+                  <button 
+                    onClick={() => handleImportClick('grocery')}
+                    className="w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Grid className="w-4 h-4 text-blue-500" /> Import to Grocery
+                  </button>
+                  <button 
+                    onClick={() => handleImportClick('restaurant')}
+                    className="w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <ChefHat className="w-4 h-4 text-orange-500" /> Import to Restaurant
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={handleImportClick as any} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-bold transition">
+                <Upload className="w-4 h-4" /> Import (Excel/CSV)
+              </button>
+            )}
             <div className="relative group">
               <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-bold transition">
                 <Download className="w-4 h-4" /> Export
@@ -3242,16 +3276,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const renderContent = () => {
     switch (activeTab) {
       case 'Products': {
-        const filteredProducts = products.filter(p => 
-          (p.nombre || '').toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+        const filteredProducts = products.filter(p => {
+          const searchMatch = (p.nombre || '').toLowerCase().includes(productSearchQuery.toLowerCase()) ||
           (p.upc || '').toLowerCase().includes(productSearchQuery.toLowerCase()) ||
           (p.sku || '').toLowerCase().includes(productSearchQuery.toLowerCase()) ||
-          (p.categoria || '').toLowerCase().includes(productSearchQuery.toLowerCase())
-        );
+          (p.categoria || '').toLowerCase().includes(productSearchQuery.toLowerCase());
+          
+          if (businessCategory?.id === 'combo') {
+            return searchMatch && (!p.moduleType || p.moduleType === productAdminComboView);
+          }
+          return searchMatch;
+        });
         return (
           <>
+            {businessCategory?.id === 'combo' && (
+              <div className="flex justify-center mb-6 print:hidden">
+                <div className="flex items-center gap-2 bg-slate-800 p-1.5 rounded-full border border-slate-700 shadow-xl max-w-sm w-full mx-auto">
+                  <button 
+                    onClick={() => setProductAdminComboView('grocery')}
+                    className={`flex-1 py-3 rounded-full text-sm font-black tracking-widest flex items-center justify-center gap-3 transition-colors ${productAdminComboView === 'grocery' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    <Grid className="w-5 h-5" /> GROCERY
+                  </button>
+                  <button 
+                    onClick={() => setProductAdminComboView('restaurant')}
+                    className={`flex-1 py-3 rounded-full text-sm font-black tracking-widest flex items-center justify-center gap-3 transition-colors ${productAdminComboView === 'restaurant' ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    <ChefHat className="w-5 h-5" /> REST.
+                  </button>
+                </div>
+              </div>
+            )}
             <ActionHeader 
-              title="Products Catalog" 
+              title={businessCategory?.id === 'combo' ? `Products Catalog - ${productAdminComboView.toUpperCase()}` : "Products Catalog"}
               extraActions={
                 <>
                   <button 
@@ -3389,7 +3446,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 ...(!businessCategory || businessCategory.enabledFields.precio ? ['Precio'] : []),
                 ...(!businessCategory || businessCategory.enabledFields.costo ? ['Costo'] : []),
                 ...(!businessCategory || businessCategory.enabledFields.categoria ? ['Categoria'] : []),
-                ...(businessCategory?.id === 'combo' ? ['Module'] : []),
                 ...(!businessCategory || businessCategory.enabledFields.sku ? ['SKU'] : []),
                 ...(!businessCategory || businessCategory.enabledFields.serialNumber ? ['Serial'] : []),
                 ...(!businessCategory || businessCategory.enabledFields.lote ? ['Lote'] : []),
@@ -3426,13 +3482,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              if (file.size > 500 * 1024) {
-                                alert("Image must be smaller than 500KB");
+                              if (file.size > 2 * 1024 * 1024) {
+                                alert("Image must be smaller than 2MB");
                                 return;
                               }
                               const reader = new FileReader();
                               reader.onloadend = () => {
-                                handleProductChange(p.id, 'imagenUrl', reader.result as string);
+                                const img = new Image();
+                                img.onload = () => {
+                                  const MAX_WIDTH = 400; const MAX_HEIGHT = 400;
+                                  let width = img.width; let height = img.height;
+                                  if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } }
+                                  else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+                                  const canvas = document.createElement('canvas');
+                                  canvas.width = width; canvas.height = height;
+                                  const ctx = canvas.getContext('2d');
+                                  if (ctx) {
+                                    ctx.drawImage(img, 0, 0, width, height);
+                                    const base64 = canvas.toDataURL('image/jpeg', 0.8);
+                                    handleProductChange(p.id, 'imagenUrl', base64);
+                                  }
+                                };
+                                img.src = reader.result as string;
                               };
                               reader.readAsDataURL(file);
                             }
@@ -3450,7 +3521,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   {(!businessCategory || businessCategory.enabledFields.unitsPerBox) && (
                     <td className="px-2 py-1"><EditableCell type="number" value={p.unitsPerBox || 1} onChange={(v:any) => handleProductChange(p.id, 'unitsPerBox', v)} className="w-16" /></td>
                   )}
-                  <td className="px-2 py-1"><EditableCell value={p.nombre} onChange={(v:any) => handleProductChange(p.id, 'nombre', v)} className="font-bold min-w-[150px]" /></td>
+                  <td className="px-2 py-1 flex items-center gap-2">
+                    {businessCategory?.id === 'combo' && p.moduleType && (
+                      <span className="shrink-0 p-1 bg-slate-100 rounded-md text-slate-500" title={p.moduleType === 'restaurant' ? 'Restaurant' : 'Grocery'}>
+                        {p.moduleType === 'restaurant' ? <ChefHat className="w-3 h-3" /> : <Grid className="w-3 h-3" />}
+                      </span>
+                    )}
+                    <EditableCell value={p.nombre} onChange={(v:any) => handleProductChange(p.id, 'nombre', v)} className="font-bold min-w-[150px]" />
+                  </td>
                   {(!businessCategory || businessCategory.enabledFields.precio) && (
                     <td className="px-2 py-1">
                       <EditableCell type="number" value={p.precio} step="0.01" onChange={(v:any) => handleProductChange(p.id, 'precio', v)} className="w-20" />
@@ -3472,18 +3550,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   )}
                   {(!businessCategory || businessCategory.enabledFields.categoria) && (
                     <td className="px-2 py-1"><EditableCell value={p.categoria} onChange={(v:any) => handleProductChange(p.id, 'categoria', v)} className="w-24" /></td>
-                  )}
-                  {businessCategory?.id === 'combo' && (
-                    <td className="px-2 py-1">
-                      <select
-                        value={p.moduleType || 'grocery'}
-                        onChange={(e) => handleProductChange(p.id, 'moduleType', e.target.value)}
-                        className="p-1 border rounded text-xs font-bold bg-slate-50 w-24"
-                      >
-                        <option value="grocery">Grocery</option>
-                        <option value="restaurant">Rest.</option>
-                      </select>
-                    </td>
                   )}
                   {(!businessCategory || businessCategory.enabledFields.sku) && (
                     <td className="px-2 py-1"><EditableCell value={p.sku} onChange={(v:any) => handleProductChange(p.id, 'sku', v)} className="text-xs w-20" /></td>
@@ -5926,6 +5992,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           globalImages={globalImages}
           businessCategory={businessCategory}
           globalModifierGroups={globalModifierGroups}
+          initialModuleType={productAdminComboView}
           onClose={() => setIsAddingProduct(false)}
           onSave={async (newProduct: Product) => {
             try {
