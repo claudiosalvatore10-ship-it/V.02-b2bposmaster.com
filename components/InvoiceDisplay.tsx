@@ -113,6 +113,7 @@ const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
                 paymentMethod={data.metodoPago}
                 splits={order?.splits}
                 invoiceId={data.id || data.invoiceNumber || data.factura}
+                bills={data.bills}
               />
             ) : (
               <InvoicePreview 
@@ -131,6 +132,7 @@ const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
                 dueDate={date}
                 splits={order?.splits}
                 invoiceId={data.id || data.invoiceNumber || data.factura}
+                bills={data.bills}
               />
             )}
           </div>

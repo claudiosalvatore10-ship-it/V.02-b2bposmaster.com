@@ -1,17 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Monitor, ShoppingCart, BarChart3, Smartphone, Zap, Shield, 
   ChefHat, Layers, Globe, Clock, CheckCircle2, ArrowRight, RefreshCw, Grid
 } from 'lucide-react';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast } from 'sonner';
 
 import { formatPhoneNumber } from '../utils';
 
+const iconMap: Record<string, any> = {
+  Zap,
+  Shield,
+  BarChart3,
+  Globe,
+  Smartphone,
+  Clock,
+  Monitor,
+  ShoppingCart,
+  ChefHat,
+  Layers,
+  Grid
+};
+
 interface LandingPageProps {
-  onDemoSignup?: () => void;
+  onDemoSignup?: (formData?: any) => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
@@ -27,6 +41,45 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   
   const [showQuickTrialModal, setShowQuickTrialModal] = useState(false);
+
+  const [landingConfig, setLandingConfig] = useState({
+    heroBadge: 'Enterprise Distribution Network v.01',
+    heroTitle: 'Domina la distribución global.',
+    heroSubtitle: 'Gestión inteligente de inventarios, logística avanzada y facturación centralizada para redes de distribución a gran escala.',
+    heroImage: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&q=80&w=1000',
+    heroCta: 'Prueba Gratis Inmediata',
+    heroCtaSecondary: 'Contactar a Ventas',
+    featuresTitle: 'Inteligencia Corporativa',
+    featuresSubtitle: 'Potencia cada sucursal con herramientas de nivel Enterprise.',
+    features: [
+      { icon: 'Zap', title: 'Logística en Tiempo Real', desc: 'Rastreo preciso de stock y movimientos entre bodegas con latencia cero.' },
+      { icon: 'Shield', title: 'Seguridad Multi-capa', desc: 'Protocolos de encriptación bancaria para proteger cada transacción comercial.' },
+      { icon: 'BarChart3', title: 'Insights de Mercado', desc: 'Analítica avanzada con IA para predecir demanda y optimizar márgenes.' },
+      { icon: 'Globe', title: 'Escalabilidad Global', desc: 'Añade nuevas regiones o nodos de distribución en segundos desde la nube.' },
+      { icon: 'Smartphone', title: 'Acceso Multi-dispositivo', desc: 'Control total desde tablets, móviles o estaciones de escritorio dedicadas.' },
+      { icon: 'Clock', title: 'Continuidad Operativa', desc: 'Arquitectura resiliente que garantiza disponibilidad del 99.9% para tu negocio.' }
+    ],
+    contactTitle: 'Diseña tu Instancia Enterprise.',
+    contactSubtitle: 'Cuentanos sobre tu negocio y nuestro equipo configurará un entorno dedicado y optimizado para tus volúmenes de operación.',
+    contactItems: ['Mapeo de requerimientos', 'Setup de catálogos', 'Capacitación del equipo', 'Soporte VIP'],
+    contactFormTitle: 'Instancia Enterprise Personalizada',
+    contactFormSubtitle: 'Contacta a ventas para diseñar un entorno alineado a tu infraestructura comercial.'
+  });
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'system', 'landingPage'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setLandingConfig(prev => ({
+          ...prev,
+          ...data,
+          features: data.features || prev.features,
+          contactItems: data.contactItems || prev.contactItems
+        }));
+      }
+    });
+    return () => unsub();
+  }, []);
 
   const toggleNecesidad = (req: string) => {
     setNecesidades(prev => prev.includes(req) ? prev.filter(r => r !== req) : [...prev, req]);
@@ -97,27 +150,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
           <div className="flex-1 text-center lg:text-left">
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
               <span className="inline-block py-1 px-3 rounded-full bg-blue-50 text-blue-600 font-bold text-xs uppercase tracking-widest mb-6 border border-blue-100">
-                Enterprise Distribution Network v.01
+                {landingConfig.heroBadge}
               </span>
               <h1 className="text-5xl lg:text-7xl font-black text-slate-900 leading-[1.1] tracking-tight mb-6">
-                Domina la distribución <span className="text-blue-600 underline decoration-blue-100 underline-offset-8">global.</span>
+                {landingConfig.heroTitle}
               </h1>
               <p className="text-xl text-slate-500 mb-8 max-w-2xl mx-auto lg:mx-0 font-medium leading-relaxed">
-                Gestión inteligente de inventarios, logística avanzada y facturación centralizada para redes de distribución a gran escala.
+                {landingConfig.heroSubtitle}
               </p>
               <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
                 <button onClick={() => setShowQuickTrialModal(true)} className="w-full sm:w-auto bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-lg hover:bg-blue-700 transition shadow-xl shadow-blue-200 flex items-center justify-center gap-2">
-                  Prueba Gratis Inmediata <ArrowRight className="w-5 h-5" />
+                  {landingConfig.heroCta} <ArrowRight className="w-5 h-5" />
                 </button>
                 <a href="#demo" className="w-full sm:w-auto bg-white text-slate-700 border-2 border-slate-200 px-8 py-4 rounded-2xl font-black text-lg hover:border-slate-300 hover:bg-slate-50 transition text-center flex items-center justify-center">
-                  Contactar a Ventas
+                  {landingConfig.heroCtaSecondary}
                 </a>
               </div>
             </motion.div>
           </div>
           <div className="flex-1 relative">
             <div className="absolute inset-0 bg-gradient-to-tr from-blue-100 to-indigo-50 rounded-[3rem] transform rotate-3 scale-105 -z-10 blur-3xl opacity-50"></div>
-            <img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&q=80&w=1000" alt="POS System" className="rounded-[2rem] shadow-2xl border-4 border-white transform -rotate-2 hover:rotate-0 transition duration-500" />
+            <img src={landingConfig.heroImage} alt="POS System" className="rounded-[2rem] shadow-2xl border-4 border-white transform -rotate-2 hover:rotate-0 transition duration-500 max-h-[480px] w-full object-cover" referrerPolicy="no-referrer" />
           </div>
         </div>
       </section>
@@ -126,27 +179,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
       <section id="features" className="py-24 bg-white px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-2xl mx-auto mb-20">
-            <h2 className="text-4xl font-black tracking-tight text-slate-900 mb-4">Inteligencia Corporativa</h2>
-            <p className="text-lg text-slate-500 font-medium tracking-tight">Potencia cada sucursal con herramientas de nivel Enterprise.</p>
+            <h2 className="text-4xl font-black tracking-tight text-slate-900 mb-4">{landingConfig.featuresTitle}</h2>
+            <p className="text-lg text-slate-500 font-medium tracking-tight">{landingConfig.featuresSubtitle}</p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
-            {[
-              { icon: Zap, title: 'Logística en Tiempo Real', desc: 'Rastreo preciso de stock y movimientos entre bodegas con latencia cero.' },
-              { icon: Shield, title: 'Seguridad Multi-capa', desc: 'Protocolos de encriptación bancaria para proteger cada transacción comercial.' },
-              { icon: BarChart3, title: 'Insights de Mercado', desc: 'Analítica avanzada con IA para predecir demanda y optimizar márgenes.' },
-              { icon: Globe, title: 'Escalabilidad Global', desc: 'Añade nuevas regiones o nodos de distribución en segundos desde la nube.' },
-              { icon: Smartphone, title: 'Acceso Multi-dispositivo', desc: 'Control total desde tablets, móviles o estaciones de escritorio dedicadas.' },
-              { icon: Clock, title: 'Continuidad Operativa', desc: 'Arquitectura resiliente que garantiza disponibilidad del 99.9% para tu negocio.' },
-            ].map((feature, i) => (
-              <div key={i} className="group bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-2 transition-all duration-500 overflow-hidden relative">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50/50 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-700"></div>
-                <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-blue-600 mb-8 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-500">
-                  <feature.icon className="w-8 h-8" />
+            {landingConfig.features.map((feature, i) => {
+              const IconComponent = typeof feature.icon === 'string' ? (iconMap[feature.icon] || Zap) : feature.icon;
+              return (
+                <div key={i} className="group bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-2 transition-all duration-500 overflow-hidden relative">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50/50 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-700"></div>
+                  <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-blue-600 mb-8 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-500">
+                    <IconComponent className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">{feature.title}</h3>
+                  <p className="text-slate-500 font-medium leading-relaxed text-sm opacity-80 group-hover:opacity-100">{feature.desc}</p>
                 </div>
-                <h3 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">{feature.title}</h3>
-                <p className="text-slate-500 font-medium leading-relaxed text-sm opacity-80 group-hover:opacity-100">{feature.desc}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -158,12 +207,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
               <span className="text-blue-400 font-bold uppercase tracking-widest text-sm mb-4 block">Enterprise Setup</span>
-              <h2 className="text-4xl lg:text-5xl font-black tracking-tight mb-6 text-white">Diseña tu Instancia Enterprise.</h2>
+              <h2 className="text-4xl lg:text-5xl font-black tracking-tight mb-6 text-white">{landingConfig.contactTitle}</h2>
               <p className="text-lg text-slate-300 font-medium mb-8">
-                Cuentanos sobre tu negocio y nuestro equipo configurará un entorno dedicado y optimizado para tus volúmenes de operación.
+                {landingConfig.contactSubtitle}
               </p>
               <ul className="space-y-4">
-                {['Mapeo de requerimientos', 'Setup de catálogos', 'Capacitación del equipo', 'Soporte VIP'].map((item, i) => (
+                {landingConfig.contactItems.map((item, i) => (
                   <li key={i} className="flex items-center gap-3 text-slate-200 font-bold">
                     <CheckCircle2 className="w-6 h-6 text-blue-400" /> {item}
                   </li>
@@ -194,8 +243,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
                 </div>
               ) : (
                 <>
-                  <h3 className="text-2xl font-black mb-2">Instancia Enterprise Personalizada</h3>
-                  <p className="text-slate-500 font-medium text-sm mb-6">Contacta a ventas para diseñar un entorno alineado a tu infraestructura comercial.</p>
+                  <h3 className="text-2xl font-black mb-2">{landingConfig.contactFormTitle}</h3>
+                  <p className="text-slate-500 font-medium text-sm mb-6">{landingConfig.contactFormSubtitle}</p>
                   <form onSubmit={handleRequestDemo} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -295,14 +344,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Tipo de Negocio *</label>
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                     <button 
                       type="button"
                       onClick={() => setBusinessType('wholesale')}
                       className={`py-3 px-2 rounded-xl border font-bold transition-all flex flex-col items-center justify-center gap-2 ${businessType === 'wholesale' ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
                     >
                       <Layers className="w-5 h-5" />
-                      <span className="text-xs">Wholesale</span>
+                      <span className="text-[11px] lg:text-xs">Wholesale</span>
                     </button>
                     <button 
                       type="button"
@@ -310,7 +359,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
                       className={`py-3 px-2 rounded-xl border font-bold transition-all flex flex-col items-center justify-center gap-2 ${businessType === 'retail' ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
                     >
                       <ShoppingCart className="w-5 h-5" />
-                      <span className="text-xs">Retail</span>
+                      <span className="text-[11px] lg:text-xs">Retail</span>
                     </button>
                     <button 
                       type="button"
@@ -318,7 +367,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
                       className={`py-3 px-2 rounded-xl border font-bold transition-all flex flex-col items-center justify-center gap-2 ${businessType === 'restaurant' ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
                     >
                       <ChefHat className="w-5 h-5" />
-                      <span className="text-xs">Restaurant</span>
+                      <span className="text-[11px] lg:text-xs">Restaurant</span>
                     </button>
                     <button 
                       type="button"
@@ -326,7 +375,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
                       className={`py-3 px-2 rounded-xl border font-bold transition-all flex flex-col items-center justify-center gap-2 ${businessType === 'grocery' ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
                     >
                       <Grid className="w-5 h-5" />
-                      <span className="text-xs">Grocery</span>
+                      <span className="text-[11px] lg:text-xs">Grocery</span>
                     </button>
                     <button 
                       type="button"
@@ -334,7 +383,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
                       className={`py-3 px-2 rounded-xl border font-bold transition-all flex flex-col items-center justify-center gap-2 col-span-2 lg:col-span-1 ${businessType === 'combo' ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
                     >
                       <div className="flex gap-1"><Grid className="w-5 h-5" /><ChefHat className="w-5 h-5" /></div>
-                      <span className="text-xs">Combo (Groc. + Rest.)</span>
+                      <span className="text-[11px] lg:text-xs">Combo</span>
                     </button>
                   </div>
                 </div>

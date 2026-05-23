@@ -86,6 +86,13 @@ export const StoreSetup: React.FC<StoreSetupProps> = ({ user, onComplete }) => {
           { id: 'wc5', nombre: 'Mascotas' },
           { id: 'wc6', nombre: 'Limpieza Hogar' }
         ];
+      } else if (businessType === 'combo') {
+        categoriesToSeed = [
+          ...INITIAL_CATEGORIES,
+          { id: 'c1', nombre: 'Frutas y Verduras' },
+          { id: 'c2', nombre: 'Abarrotes' },
+          { id: 'c3', nombre: 'Lácteos' }
+        ];
       }
 
       categoriesToSeed.forEach(cat => {
@@ -133,6 +140,15 @@ export const StoreSetup: React.FC<StoreSetupProps> = ({ user, onComplete }) => {
           { id: 'w4', nombre: 'Saco de Arroz 25kg', precio: 45.00, costo: 30.00, categoria: 'Abarrotes', sku: 'AR-001', stock: 80, upc: '554', unitsPerBox: 1, boxBarcode: 'B-554' },
           { id: 'w5', nombre: 'Saco de Frijol 25kg', precio: 50.00, costo: 35.00, categoria: 'Abarrotes', sku: 'FR-001', stock: 60, upc: '555', unitsPerBox: 1, boxBarcode: 'B-555' },
         ] as any[];
+      } else if (businessType === 'combo') {
+        const groceryProducts = [
+          { id: 'gc1', nombre: 'Manzana Roja (Kg)', precio: 3.50, costo: 1.50, categoria: 'Frutas y Verduras', sku: 'FR-001', stock: 100, upc: '331', unidad: 'kg' },
+          { id: 'gc2', nombre: 'Leche Enterprise 1L', precio: 1.20, costo: 0.80, categoria: 'Lácteos', sku: 'LK-001', stock: 50, upc: '332', unidad: 'unit' },
+          { id: 'gc3', nombre: 'Bebida Energética Vz', precio: 2.50, costo: 1.50, categoria: 'Bebidas', sku: 'BE-001', stock: 30, upc: '333', unidad: 'unit' },
+        ];
+        demoProducts = [...groceryProducts, ...INITIAL_PRODUCTS.slice(0, 3)] as any[];
+      } else if (businessType === 'restaurant') {
+        demoProducts = INITIAL_PRODUCTS.slice(0, 5) as any[];
       }
 
       demoProducts.forEach(p => {

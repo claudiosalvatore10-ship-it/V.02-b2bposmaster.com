@@ -7,7 +7,7 @@ import {
   Trash2, CreditCard, DollarSign, Wallet, 
   Tag, Package, ChevronRight, Calculator,
   Grid, List, Sparkles, Smartphone,
-  MinusCircle, PlusCircle, X
+  MinusCircle, PlusCircle, X, Truck, UserPlus, Percent, Star
 } from 'lucide-react';
 import { Product, CartItem, StoreSettings, Category, Tax, BusinessCategory, Salesman, Vendor } from '../types';
 import { EditCartItemModal } from './EditCartItemModal';
@@ -25,6 +25,8 @@ interface GroceryViewProps {
   businessCategory: BusinessCategory | null;
   activeSalesman: Salesman | null;
   isReceiveMode?: boolean;
+  onToggleReceiveMode?: (mode: boolean) => void;
+  onAddClient?: () => void;
   vendors?: Vendor[];
 }
 
@@ -41,16 +43,20 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
   businessCategory,
   activeSalesman,
   isReceiveMode = false,
+  onToggleReceiveMode,
+  onAddClient,
   vendors = []
 }) => {
   const { t } = useTranslation();
   const [numpadValue, setNumpadValue] = useState<string>('0.00');
+  const [quickAccessViewMode, setQuickAccessViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVendorId, setSelectedVendorId] = useState<string>('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [checkRef, setCheckRef] = useState('');
   const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
+  const [isPreOrderMode, setIsPreOrderMode] = useState<boolean>(false);
 
   const handleNumpadPress = (value: string) => {
     if (value === 'C') {
@@ -141,29 +147,59 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
       {/* 1/4 COLUMN: CURRENT ORDER */}
       <div className="w-1/4 min-w-[300px] bg-white flex flex-col border-r border-slate-200 z-20">
         <div className="p-5 xl:p-6 border-b border-slate-100 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-[9px] xl:text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{storeSettings.nombre || 'DOWNTOWN STORE'}</span>
-              <div className="flex items-center gap-2 mt-1">
-                 <div className="w-7 h-7 xl:w-8 xl:h-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
-                    {isReceiveMode ? <Package className="w-4 h-4 xl:w-5 xl:h-5" /> : <ShoppingCart className="w-4 h-4 xl:w-5 xl:h-5" />}
-                  </div>
-                  <h2 className="text-lg xl:text-xl font-black text-slate-900 tracking-tight">
-                    {isReceiveMode ? 'Vendor Invoice' : 'Current Order'}
-                  </h2>
-              </div>
-            </div>
-            {!isReceiveMode && (
-              <div className="flex gap-2">
-                <button className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 transition-all">
-                  <Plus className="w-4 h-4" />
-                </button>
-                <button className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all">
-                  <Tag className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </div>
+             <div className="flex justify-between items-start">
+               <div className="flex flex-col">
+                 <span className="text-[9px] xl:text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{storeSettings.nombre || 'DOWNTOWN STORE'}</span>
+                 <div className="flex items-center gap-2 mt-1">
+                    <div className={`w-7 h-7 xl:w-8 xl:h-8 rounded-xl flex items-center justify-center ${isReceiveMode ? (isPreOrderMode ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600') : 'bg-blue-50 text-blue-600'}`}>
+                       {isReceiveMode ? (isPreOrderMode ? <Package className="w-4 h-4 xl:w-5 xl:h-5" /> : <Truck className="w-4 h-4 xl:w-5 xl:h-5" />) : <ShoppingCart className="w-4 h-4 xl:w-5 xl:h-5" />}
+                     </div>
+                     <h2 className="text-lg xl:text-xl font-black text-slate-900 tracking-tight">
+                       {isReceiveMode ? 'Vendor Invoice' : 'Current Order'}
+                     </h2>
+                 </div>
+               </div>
+               
+               <div className="flex gap-2">
+                 <button 
+                  onClick={onAddClient}
+                  className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-emerald-50 hover:text-emerald-600 transition-all shadow-sm border border-slate-100"
+                  title="Add Client"
+                 >
+                   <UserPlus className="w-4 h-4" />
+                 </button>
+                 <button className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-emerald-50 hover:text-emerald-600 transition-all shadow-sm border border-slate-100">
+                   <Plus className="w-4 h-4" />
+                 </button>
+                 <button 
+                  onClick={() => {
+                    if (isReceiveMode && !isPreOrderMode) {
+                      onToggleReceiveMode?.(false);
+                    } else {
+                      onToggleReceiveMode?.(true);
+                      setIsPreOrderMode(false);
+                    }
+                  }}
+                  className={`p-2 rounded-lg transition-all shadow-sm border ${isReceiveMode && !isPreOrderMode ? 'bg-blue-500 text-white border-blue-600' : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-blue-50 hover:text-blue-600'}`}>
+                   <Truck className="w-4 h-4" />
+                 </button>
+                 <button 
+                  onClick={() => {
+                    if (isReceiveMode && isPreOrderMode) {
+                      onToggleReceiveMode?.(false);
+                    } else {
+                      onToggleReceiveMode?.(true);
+                      setIsPreOrderMode(true);
+                    }
+                  }}
+                  className={`relative group p-2 rounded-lg transition-all shadow-sm border ${isReceiveMode && isPreOrderMode ? 'bg-orange-500 text-white border-orange-600' : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-orange-50 hover:text-orange-600'}`}>
+                   <Package className="w-4 h-4" />
+                 </button>
+                 <button className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-emerald-50 hover:text-emerald-600 transition-all shadow-sm border border-slate-100">
+                   <Tag className="w-4 h-4" />
+                 </button>
+               </div>
+             </div>
 
           {isReceiveMode && (
             <div className="flex flex-col gap-1.5">
@@ -232,12 +268,15 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
         </div>
 
         {isReceiveMode ? (
-          <div className="p-6 bg-emerald-50/30 border-t border-emerald-100 flex flex-col gap-4">
+          <div className={`p-6 border-t flex flex-col gap-4 ${isPreOrderMode ? 'bg-orange-50/50 border-orange-100' : 'bg-emerald-50/30 border-emerald-100'}`}>
              <div className="flex justify-between items-end mb-2">
-                <span className="text-sm xl:text-base font-black text-blue-900 uppercase tracking-widest">Invoice Total</span>
-                <span className="text-3xl xl:text-4xl font-black text-blue-600 tracking-tighter">${total.toFixed(2)}</span>
+                <span className={`text-sm xl:text-base font-black uppercase tracking-widest ${isPreOrderMode ? 'text-orange-900' : 'text-blue-900'}`}>
+                  {isPreOrderMode ? 'PRE-ORDER TOTAL' : 'INVOICE TOTAL'}
+                </span>
+                <span className={`text-3xl xl:text-4xl font-black tracking-tighter ${isPreOrderMode ? 'text-orange-600' : 'text-blue-600'}`}>${total.toFixed(2)}</span>
              </div>
              
+             {!isPreOrderMode && (
              <div className="flex gap-3">
                <div className="flex-1 flex flex-col gap-1.5">
                  <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest">Invoice #</label>
@@ -260,6 +299,7 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
                  />
                </div>
              </div>
+             )}
              
              <button 
                onClick={() => {
@@ -267,7 +307,7 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
                    toast.error('Please select a vendor first');
                    return;
                  }
-                 if (!invoiceNumber) {
+                 if (!isPreOrderMode && !invoiceNumber) {
                    toast.error('Please enter an invoice number');
                    return;
                  }
@@ -275,9 +315,9 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
                  setInvoiceNumber('');
                  setCheckRef('');
                }}
-               className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-xl py-4 flex items-center justify-center gap-2 font-black tracking-widest uppercase transition-all shadow-lg shadow-blue-200 mt-2 active:scale-95"
+               className={`w-full text-white rounded-xl py-4 flex items-center justify-center gap-2 font-black tracking-widest uppercase transition-all shadow-lg active:scale-95 ${isPreOrderMode ? 'bg-[#ffca80] hover:bg-[#feb454] shadow-orange-200 mt-2' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-200 mt-2'}`}
              >
-               <Package className="w-6 h-6" /> COMPLETE INVOICE
+               <Package className="w-6 h-6" /> {isPreOrderMode ? 'COMPLETE PRE-ORDER' : 'COMPLETE INVOICE'}
              </button>
           </div>
         ) : (
@@ -309,8 +349,8 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
            <div className="flex items-center gap-2 xl:gap-3">
               {isReceiveMode ? (
                 <>
-                  <Package className="w-5 h-5 text-blue-500" />
-                  <h2 className="text-lg xl:text-xl font-black text-slate-900 tracking-tight">Vendor Product Grid</h2>
+                  <Package className={`w-5 h-5 ${isPreOrderMode ? 'text-orange-500' : 'text-blue-500'}`} />
+                  <h2 className="text-lg xl:text-xl font-black text-slate-900 tracking-tight">{isPreOrderMode ? 'Pre-Order Grid' : 'Vendor Product Grid'}</h2>
                 </>
               ) : (
                 <>
@@ -331,9 +371,19 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
                 </button>
               </div>
            ) : (
-              <div className="flex bg-white rounded-xl p-1 shadow-sm border border-slate-100 hidden xl:flex">
-                 <button className="p-1.5 xl:p-2 rounded-lg text-slate-300 hover:text-slate-600"><List className="w-4 h-4" /></button>
-                 <button className="p-1.5 xl:p-2 rounded-lg bg-emerald-50 text-emerald-600 shadow-sm"><Grid className="w-4 h-4" /></button>
+              <div className="flex bg-white rounded-xl p-1 shadow-sm border border-slate-100">
+                 <button 
+                   onClick={() => setQuickAccessViewMode('list')}
+                   className={`p-1.5 xl:p-2 rounded-lg transition-colors ${quickAccessViewMode === 'list' ? 'bg-emerald-50 text-emerald-600 shadow-sm' : 'text-slate-300 hover:text-slate-600'}`}
+                 >
+                   <List className="w-4 h-4" />
+                 </button>
+                 <button 
+                   onClick={() => setQuickAccessViewMode('grid')}
+                   className={`p-1.5 xl:p-2 rounded-lg transition-colors ${quickAccessViewMode === 'grid' ? 'bg-emerald-50 text-emerald-600 shadow-sm' : 'text-slate-300 hover:text-slate-600'}`}
+                 >
+                   <Grid className="w-4 h-4" />
+                 </button>
               </div>
            )}
         </div>
@@ -373,7 +423,7 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
                   <div className="space-y-4">
                     <button 
                       onClick={handleAddSelectedToTicket}
-                      className="w-full py-3 bg-blue-400/90 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2"
+                      className={`w-full py-3 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2 ${isPreOrderMode ? 'bg-[#ffab73] hover:bg-[#ff9c5a]' : 'bg-blue-400/90 hover:bg-blue-500'}`}
                     >
                       <Plus className="w-4 h-4" /> Add selected to ticket
                     </button>
@@ -433,37 +483,68 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
           ) : (
             <div className="space-y-4">
                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">{selectedCategory || 'ALL ITEMS'}</span>
-               <div className="grid grid-cols-2 gap-3 xl:gap-4">
-                 {featuredItems.map(p => (
-                   <motion.button
-                     key={p.id}
-                     whileTap={{ scale: 0.96 }}
-                     onClick={() => handleProductClick(p)}
-                     className="bg-white rounded-[2rem] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 text-left group border border-slate-100 flex flex-col h-full"
-                   >
-                     {(!storeSettings?.hideProductImages) && (
-                       <div className="aspect-square relative overflow-hidden bg-slate-50 shrink-0">
-                         <img 
-                           src={p.imagenUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400'} 
-                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
-                           referrerPolicy="no-referrer"
-                         />
-                       </div>
-                     )}
-                     <div className="p-3 xl:p-4 flex-1 flex flex-col justify-between">
-                       <div>
-                         <h4 className="font-bold text-slate-800 text-xs truncate uppercase tracking-tight">{p.nombre}</h4>
-                         <p className="font-black text-emerald-500 text-xs xl:text-sm mt-0.5">${p.precio.toFixed(2)}/unit</p>
-                       </div>
-                       <div className="mt-2 flex justify-start">
-                         <div className="bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg inline-block">
-                            STOCK: {p.stock}
+               {quickAccessViewMode === 'grid' ? (
+                 <div className="grid grid-cols-2 gap-3 xl:gap-4">
+                   {featuredItems.length === 0 ? (
+                      <div className="col-span-2 py-10 flex flex-col items-center justify-center text-center opacity-40">
+                         <Star className="w-10 h-10 mb-4 text-slate-400" />
+                         <span className="text-sm font-bold text-slate-700">No products found.</span>
+                         <span className="text-[10px] uppercase tracking-widest text-slate-500 mt-2">Adjust categories or catalog.</span>
+                      </div>
+                   ) : featuredItems.map(p => (
+                     <motion.button
+                       key={p.id}
+                       whileTap={{ scale: 0.96 }}
+                       onClick={() => handleProductClick(p)}
+                       className="bg-white rounded-[2rem] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 text-left group border border-slate-100 flex flex-col h-full"
+                     >
+                       {(!storeSettings?.hideProductImages) && (
+                         <div className="aspect-square relative overflow-hidden bg-slate-50 shrink-0">
+                           <img 
+                             src={p.imagenUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400'} 
+                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                             referrerPolicy="no-referrer"
+                           />
+                         </div>
+                       )}
+                       <div className="p-3 xl:p-4 flex-1 flex flex-col justify-between">
+                         <div>
+                           <h4 className="font-bold text-slate-800 text-xs truncate uppercase tracking-tight">{p.nombre}</h4>
+                           <p className="font-black text-emerald-500 text-xs xl:text-sm mt-0.5">${Number(p.precio || 0).toFixed(2)}/unit</p>
+                         </div>
+                         <div className="mt-2 flex justify-start">
+                           <div className="bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg inline-block">
+                              STOCK: {p.stock}
+                           </div>
                          </div>
                        </div>
-                     </div>
-                   </motion.button>
-                 ))}
-               </div>
+                     </motion.button>
+                   ))}
+                 </div>
+               ) : (
+                 <div className="flex flex-col gap-2">
+                   {featuredItems.length === 0 ? (
+                      <div className="col-span-2 py-10 flex flex-col items-center justify-center text-center opacity-40">
+                         <Star className="w-10 h-10 mb-4 text-slate-400" />
+                         <span className="text-sm font-bold text-slate-700">No products found.</span>
+                         <span className="text-[10px] uppercase tracking-widest text-slate-500 mt-2">Adjust categories or catalog.</span>
+                      </div>
+                   ) : featuredItems.map(p => (
+                     <motion.button
+                       key={p.id}
+                       whileTap={{ scale: 0.96 }}
+                       onClick={() => handleProductClick(p)}
+                       className="bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition-all duration-300 text-left group border border-slate-100 flex items-center justify-between"
+                     >
+                       <div className="flex flex-col">
+                         <h4 className="font-bold text-slate-800 text-sm">{p.nombre}</h4>
+                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">STOCK: {p.stock}</span>
+                       </div>
+                       <p className="font-black text-emerald-500 text-sm">${Number(p.precio || 0).toFixed(2)}</p>
+                     </motion.button>
+                   ))}
+                 </div>
+               )}
             </div>
           )}
         </div>
@@ -505,83 +586,82 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
           </div>
         </div>
 
-        {/* Bottom 1/3: Refined Numpad area (Side-by-side) */}
-        <div className="flex-[1] min-h-[340px] max-h-[400px] bg-[#f8fafc] border-t border-slate-200 p-6 xl:p-8 flex gap-6 xl:gap-8 relative z-20 shrink-0">
+        {/* Bottom 1/3: Original Numpad Layout */}
+        <div className="flex-[1] bg-[#f8fafc] border-t border-slate-200 p-6 xl:p-8 flex gap-6 xl:gap-8 relative z-20 shrink-0 min-h-[320px]">
            
-           {/* Left side: Amount & Numpad */}
-           <div className="flex-[2] flex flex-col gap-4 xl:gap-5">
-              
-              {/* Amount Display and Quick Bills */}
-              <div className="flex gap-4 h-16 xl:h-20 shrink-0">
-                 <div className="flex-1 bg-white rounded-2xl border border-slate-200 flex items-center justify-end px-6 xl:px-8 relative overflow-hidden">
-                    <span className="text-4xl xl:text-5xl font-black text-slate-900 tracking-tighter">${numpadValue}</span>
-                 </div>
-                 <div className="w-[45%] grid grid-cols-3 gap-2">
-                    {[1, 5, 10, 20, 50, 100].map(amt => (
-                      <button 
-                       key={amt}
-                       onClick={() => handleQuickAmount(amt)}
-                       className="bg-white rounded-xl xl:rounded-2xl text-[10px] xl:text-xs font-black text-blue-600 shadow-sm border border-slate-200 hover:bg-blue-50 transition-all active:scale-95"
-                      >
-                        ${amt}
-                      </button>
-                    ))}
-                 </div>
+           {/* Left side: Amount & Quick Bills */}
+           <div className="w-[30%] flex flex-col gap-3">
+              <span className="text-[10px] xl:text-xs font-black text-slate-400 uppercase tracking-widest">Amount</span>
+              <div className="h-16 xl:h-20 bg-white rounded-2xl border border-slate-200 flex items-center justify-end px-6 relative overflow-hidden shrink-0">
+                 <span className="text-4xl xl:text-5xl font-black text-slate-300 tracking-tighter">${numpadValue}</span>
               </div>
+              <div className="grid grid-cols-3 gap-2">
+                 {[1, 5, 10, 20, 50, 100].map(amt => (
+                   <button 
+                    key={amt}
+                    onClick={() => handleQuickAmount(amt)}
+                    className="bg-white rounded-xl py-2 text-xs font-black text-slate-600 shadow-sm border border-slate-200 hover:bg-slate-50 transition-all active:scale-95"
+                   >
+                     ${amt}
+                   </button>
+                 ))}
+              </div>
+              <button className="w-full mt-auto bg-[#8e9fb2] text-white rounded-xl py-3 text-[10px] xl:text-xs font-black uppercase tracking-[0.2em] shadow-sm hover:bg-[#7b8fa3] transition-all flex items-center justify-center gap-2">
+                 <div className="w-3 flex flex-col gap-0.5 opacity-70"><div className="w-full border-t-[2px] border-current"></div><div className="w-full border-t-[2px] border-current"></div></div> HOLD ORDER
+              </button>
+           </div>
 
-              {/* Matrix */}
-              <div className="flex-1 flex gap-4">
-                 <div className="flex-1 grid grid-cols-3 gap-3">
-                    {[7, 8, 9, 4, 5, 6, 1, 2, 3, '00', 0, '.'].map(val => (
-                      <button
-                       key={val}
-                       onClick={() => handleNumpadPress(val.toString())}
-                       className="bg-white rounded-2xl shadow-sm border border-slate-200 text-2xl xl:text-3xl font-black text-slate-800 hover:bg-slate-50 transition-all active:scale-95 flex items-center justify-center"
-                      >
-                        {val}
-                      </button>
-                    ))}
-                 </div>
-                 <div className="w-[20%] min-w-[80px] grid grid-cols-1 gap-3">
-                    <button 
-                     onClick={() => handleNumpadPress('delete')}
-                     className="bg-rose-50 text-rose-500 rounded-2xl border border-rose-100 shadow-sm flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95"
-                    >
-                      <Delete className="w-8 h-8 xl:w-10 xl:h-10" />
-                    </button>
-                    <button 
-                     onClick={() => handleNumpadPress('C')}
-                     className="bg-slate-200 text-slate-600 rounded-2xl border border-slate-300 shadow-sm text-2xl xl:text-3xl font-black hover:bg-slate-300 transition-all active:scale-95"
-                    >
-                      C
-                    </button>
-                 </div>
+           {/* Middle side: Matrix */}
+           <div className="w-[45%] flex flex-col justify-end gap-3 pb-1">
+              <div className="grid grid-cols-3 gap-3">
+                 {[7, 8, 9, 4, 5, 6, 1, 2, 3, '00', 0, '.'].map(val => (
+                   <button
+                    key={val}
+                    onClick={() => handleNumpadPress(val.toString())}
+                    className="h-16 bg-[#f5f7fa] rounded-xl shadow-sm border border-slate-200 text-2xl xl:text-3xl font-black text-blue-600 hover:bg-blue-50 transition-all active:scale-95 flex items-center justify-center"
+                   >
+                     {val}
+                   </button>
+                 ))}
               </div>
            </div>
 
            {/* Right side: Checkout Buttons */}
-           <div className="flex-[1] flex flex-col gap-3 min-w-[200px] max-w-[260px]">
-              <div className="flex justify-between items-center px-1">
-                 <span className="text-[10px] xl:text-xs font-black text-slate-400 uppercase tracking-widest">Checkout</span>
-              </div>
+           <div className="flex-1 flex flex-col gap-2.5 min-w-[160px]">
+              <span className="text-[10px] xl:text-xs font-black text-slate-400 uppercase tracking-widest pl-1">Checkout</span>
               
+              <div className="flex gap-2">
+                 <button 
+                  onClick={() => handleNumpadPress('delete')}
+                  className="flex-1 h-12 bg-white text-red-500 rounded-xl border border-red-100 shadow-sm flex items-center justify-center hover:bg-red-50 transition-all active:scale-95"
+                 >
+                   <Delete className="w-5 h-5 xl:w-6 xl:h-6" />
+                 </button>
+                 <button 
+                  onClick={() => handleNumpadPress('C')}
+                  className="flex-1 h-12 bg-white text-red-500 rounded-xl border border-red-100 shadow-sm flex items-center justify-center text-xl font-black hover:bg-red-50 transition-all active:scale-95"
+                 >
+                   C
+                 </button>
+              </div>
+
               <button 
                 onClick={() => onCheckout()}
-                className="flex-[2] bg-[#fca168] text-white rounded-[2rem] shadow-lg shadow-orange-500/20 hover:bg-[#fc9251] transition-all active:scale-95 flex flex-col items-center justify-center gap-1 border-b-4 border-orange-500/50"
+                className="flex-[1.5] bg-[#ffab73] text-white rounded-2xl shadow-sm hover:bg-[#ff9c5a] transition-all active:scale-95 flex flex-col items-center justify-center"
               >
-                 <span className="text-xs xl:text-sm uppercase tracking-[0.2em] opacity-90 font-bold">Exact</span>
-                 <span className="text-2xl xl:text-3xl uppercase tracking-wider font-black">CASH</span>
+                 <span className="text-[9px] xl:text-[10px] font-black uppercase tracking-[0.2em] opacity-90">Exact</span>
+                 <span className="text-xl xl:text-2xl font-black uppercase tracking-wider">CASH</span>
               </button>
               
               <button 
                  onClick={() => onCheckout()}
-                 className="flex-[1] min-h-[60px] bg-[#53d08e] text-white rounded-2xl font-black text-lg xl:text-xl uppercase tracking-widest shadow-md hover:bg-[#45c380] transition-all active:scale-95 border-b-4 border-emerald-500/50">
+                 className="flex-1 bg-[#86dcb2] text-white rounded-2xl font-black text-lg xl:text-xl uppercase tracking-widest shadow-sm hover:bg-[#70cf9d] transition-all active:scale-95">
                  CASH
               </button>
               
-              <div className="flex-[1] flex gap-3 min-h-[50px]">
-                 <button onClick={() => onCheckout()} className="flex-1 bg-[#fb7893] text-white rounded-xl shadow-sm font-black text-xs xl:text-sm uppercase tracking-widest hover:bg-[#f66781] transition-all active:scale-95 border-b-4 border-rose-500/50">Credit</button>
-                 <button onClick={() => onCheckout()} className="flex-1 bg-[#6ea1fa] text-white rounded-xl shadow-sm font-black text-xs xl:text-sm uppercase tracking-widest hover:bg-[#5b95f8] transition-all active:scale-95 border-b-4 border-blue-500/50">EBT</button>
+              <div className="flex-1 flex gap-2">
+                 <button onClick={() => onCheckout()} className="flex-1 bg-[#ff8fa6] text-white rounded-xl shadow-sm font-black text-xs xl:text-sm uppercase tracking-widest hover:bg-[#ff7994] transition-all active:scale-95">Credit</button>
+                 <button onClick={() => onCheckout()} className="flex-1 bg-[#83b1ff] text-white rounded-xl shadow-sm font-black text-xs xl:text-sm uppercase tracking-widest hover:bg-[#6c9ef1] transition-all active:scale-95">EBT</button>
               </div>
            </div>
         </div>

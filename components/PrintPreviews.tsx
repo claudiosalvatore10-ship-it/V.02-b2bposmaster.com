@@ -47,6 +47,14 @@ interface PreviewProps {
   dueDate?: string;
   splits?: { amount: number; method: string }[];
   invoiceId?: string;
+  bills?: {
+    b100?: number;
+    b50?: number;
+    b20?: number;
+    b10?: number;
+    b5?: number;
+    b1?: number;
+  };
 }
 
 export const KitchenTicketPreview: React.FC<{
@@ -137,7 +145,8 @@ export const TicketPreview: React.FC<PreviewProps> = ({
   creditSurcharge,
   paymentMethod,
   splits,
-  invoiceId
+  invoiceId,
+  bills
 }) => {
   const displayInvoiceId = Object.prototype.toString.call(invoiceId) === '[object String]' && String(invoiceId).length > 0
     ? String(invoiceId).toUpperCase() 
@@ -240,6 +249,25 @@ export const TicketPreview: React.FC<PreviewProps> = ({
         </div>
       </div>
 
+      {bills && Object.values(bills || {}).some(v => v && (parseInt(String(v)) || 0) > 0) && (
+        <div className="mt-2 pt-2 border-t border-gray-200 border-dashed">
+          <p className="text-[9px] font-black uppercase text-gray-600 tracking-widest mb-1 text-left">DETALLE DE BILLETES</p>
+          <div className="space-y-0.5 text-[9px] text-gray-500 font-bold bg-gray-50 p-2 rounded border border-gray-100">
+            {Object.entries(bills || {}).map(([key, value]) => {
+              const qty = parseInt(String(value)) || 0;
+              if (qty <= 0) return null;
+              const valueNum = parseInt(key.replace('b', '')) || 0;
+              return (
+                <div key={key} className="flex justify-between text-[10px]">
+                  <span className="text-gray-500">${valueNum} x {qty}</span>
+                  <span className="text-gray-900 font-bold">${(valueNum * qty).toFixed(2)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {paymentMethod === 'Split' && splits && splits.length > 0 && (
         <div className="mt-2 pt-2 border-t border-gray-100 border-dashed space-y-1">
           <p className="text-[9px] font-black uppercase text-gray-600 tracking-widest mb-1">Split Payment Breakdown</p>
@@ -297,7 +325,8 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
   creditTerm = 'Due on Receipt',
   dueDate = new Date().toLocaleDateString(),
   splits,
-  invoiceId
+  invoiceId,
+  bills
 }) => {
   const displayInvoiceId = Object.prototype.toString.call(invoiceId) === '[object String]' && String(invoiceId).length > 0
     ? String(invoiceId).toUpperCase() 
@@ -434,6 +463,25 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
                   <span>${split.amount.toFixed(2)}</span>
                 </div>
               ))}
+            </div>
+          )}
+          
+          {paymentMethod === 'Cash' && bills && Object.values(bills || {}).some(v => v && (parseInt(String(v)) || 0) > 0) && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">DETALLE DE BILLETES</span>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-bold text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100/50">
+                {Object.entries(bills || {}).map(([key, value]) => {
+                  const qty = parseInt(String(value)) || 0;
+                  if (qty <= 0) return null;
+                  const valueNum = parseInt(key.replace('b', '')) || 0;
+                  return (
+                    <div key={key} className="flex justify-between pb-1 border-b border-gray-200/40 last:border-b-0">
+                      <span className="text-gray-500">${valueNum} x {qty}</span>
+                      <span className="text-gray-950 font-black">${(valueNum * qty).toFixed(2)}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

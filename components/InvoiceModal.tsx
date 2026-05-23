@@ -108,16 +108,17 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
   const salesman = salesmen.find(s => s.id === selectedSalesman);
   
   // Logic to determine if we should use the Wholesale Invoice layout
-  const isWholesale = (client && client.terminosCredito && client.terminosCredito !== 'CASH/TODAY') ||
-                      (businessCategory?.enabledFields?.printA4) ||
-                      (businessCategory?.name?.toLowerCase().includes('wholesale')) ||
-                      (storeSettings.nombre?.toLowerCase().includes('wholesale'));
+  const isWholesale = businessCategory?.id === 'wholesale' ||
+                      (!['restaurant', 'retail', 'grocery', 'combo'].includes(businessCategory?.id || '')) && (
+                        (client && client.terminosCredito && client.terminosCredito !== 'CASH/TODAY') ||
+                        (businessCategory?.name?.toLowerCase().includes('wholesale')) ||
+                        (storeSettings.nombre?.toLowerCase().includes('wholesale'))
+                      );
 
   // Logic to determine which print preview to display
-  const displayFormat = (businessCategory?.id === 'restaurant' && !isWholesale) ? 'ticket' :
-                        (businessCategory?.enabledFields?.printA4 ? 'invoice' : 
-                        (businessCategory?.enabledFields?.thermal80mm ? 'ticket' : 
-                        (isWholesale ? 'invoice' : (storeSettings.printFormat || 'ticket'))));
+  const displayFormat = ['restaurant', 'retail', 'grocery', 'combo'].includes(businessCategory?.id || '')
+    ? (storeSettings.printFormat || 'ticket')
+    : 'invoice';
 
   const [showWholesalePayment, setShowWholesalePayment] = React.useState(false);
 
@@ -672,6 +673,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
                 creditTerm={creditTerm}
                 dueDate={dueDate}
                 splits={splits}
+                bills={bills}
               />
             ) : (
               <TicketPreview 
@@ -687,6 +689,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
                 creditSurcharge={creditSurcharge}
                 paymentMethod={paymentMethod}
                 splits={splits}
+                bills={bills}
               />
             )}
             <div className="mt-8 flex gap-4 print:hidden w-full max-w-2xl">

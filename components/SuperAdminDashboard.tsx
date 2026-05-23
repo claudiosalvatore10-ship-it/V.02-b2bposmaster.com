@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Building2, Users, Package, Settings, Search, Trash2, ShieldCheck, Sparkles, LogOut, RefreshCw, CheckCircle, XCircle, Plus, Minus, X, Tag, ListFilter, Upload, Download, CreditCard, FileText, TrendingUp, TrendingDown, DollarSign, Briefcase, FolderOpen, Send, Filter, Link, Power } from 'lucide-react';
+import { Building2, Users, Package, Settings, Search, Trash2, ShieldCheck, Sparkles, LogOut, RefreshCw, CheckCircle, XCircle, Plus, Minus, X, Tag, ListFilter, Upload, Download, CreditCard, FileText, TrendingUp, TrendingDown, DollarSign, Briefcase, FolderOpen, Send, Filter, Link, Power, Globe } from 'lucide-react';
 import { collection, onSnapshot, query, doc, deleteDoc, updateDoc, setDoc, getDocs, writeBatch, addDoc, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, handleFirestoreError, OperationType } from '../firebase';
@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { GoogleGenAI } from "@google/genai";
 import Papa from 'papaparse';
 import { read, utils, writeFile } from 'xlsx';
+import { LandingCMS } from './LandingCMS';
 
 interface SuperAdminDashboardProps {
   onLogout: () => void;
@@ -23,7 +24,7 @@ const ALL_RUBRO_FIELDS = [
 ];
 
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onSelectStore }) => {
-  const [activeTab, setActiveTab] = useState<'stores' | 'users' | 'updates' | 'catalog' | 'catalog_images' | 'rubros' | 'billing' | 'demos'>('stores');
+  const [activeTab, setActiveTab] = useState<'stores' | 'users' | 'updates' | 'catalog' | 'catalog_images' | 'rubros' | 'billing' | 'demos' | 'landing_cms'>('stores');
   const [stores, setStores] = useState<StoreSettings[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [businessCategories, setBusinessCategories] = useState<BusinessCategory[]>([]);
@@ -1463,6 +1464,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setActiveTab('landing_cms')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 ${activeTab === 'landing_cms' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <Globe className="w-4 h-4" /> Editorial de Landing
+            </button>
           </nav>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1487,7 +1494,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
         {activeTab === 'stores' && (
           <>
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
             <div className="flex justify-between items-start mb-4">
               <div className="p-3 bg-blue-50 rounded-xl">
@@ -1519,6 +1526,24 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
             </div>
             <h3 className="text-3xl font-bold text-slate-900">Healthy</h3>
             <p className="text-slate-500 text-sm mt-1">All systems operational</p>
+          </div>
+
+          <div 
+            onClick={() => setActiveTab('landing_cms')}
+            className="bg-white p-6 rounded-2xl shadow-sm border border-dashed border-sky-300 hover:border-sky-500 hover:bg-sky-50/10 cursor-pointer transition-all duration-300 flex flex-col justify-between group h-full shadow-inner hover:shadow-cyan-100/30"
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-3 bg-sky-50 text-sky-600 rounded-xl group-hover:bg-sky-100 group-hover:text-sky-700 transition">
+                <Globe className="w-6 h-6 animate-pulse animate-duration-2000" />
+              </div>
+              <span className="text-[10px] font-black text-sky-700 bg-sky-100/50 px-2 py-1 rounded-full uppercase tracking-wider">CMS Global</span>
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800 group-hover:text-sky-600 transition flex items-center gap-1.5">
+                Editorial de Landing
+              </h3>
+              <p className="text-slate-500 text-xs mt-1 leading-relaxed">Personalizar encabezados, imágenes y características de la portada.</p>
+            </div>
           </div>
         </div>
 
@@ -1836,6 +1861,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
               </table>
             </div>
           </div>
+        )}
+
+        {activeTab === 'landing_cms' && (
+          <LandingCMS />
         )}
 
         {activeTab === 'users' && (

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Product, CartItem, Client, BusinessCategory, ModifierGroup, SelectedModifier } from '../types';
-import { Search, LayoutGrid, List, Plus, User, X as CloseIcon, Check, ChevronRight, Tag, Star } from 'lucide-react';
+import { Search, LayoutGrid, List, Plus, User, UserPlus, X as CloseIcon, Check, ChevronRight, Tag, Star } from 'lucide-react';
 import { QuantityControl } from './QuantityControl';
 
 const ComboImage: React.FC<{ items: { productId: string }[]; products: Product[] }> = ({ items, products }) => {
@@ -169,6 +169,7 @@ interface CatalogProps {
   clients?: Client[];
   selectedClient?: Client | null;
   onSelectClient?: (client: Client | null) => void;
+  onAddClient?: () => void;
   onToggleFeatured?: (product: Product) => void;
   featuredProductId?: string;
   businessCategory?: BusinessCategory | null;
@@ -184,6 +185,7 @@ const Catalog: React.FC<CatalogProps> = ({
   clients = [],
   selectedClient,
   onSelectClient,
+  onAddClient,
   onToggleFeatured,
   featuredProductId,
   businessCategory,
@@ -265,55 +267,65 @@ const Catalog: React.FC<CatalogProps> = ({
           </div>
 
           {/* Client Search (50%) */}
-          <div className="relative w-1/2" ref={clientResultsRef}>
-            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input 
-              type="text" 
-              placeholder={t('Search Client...', 'Search Client...')} 
-              className={`w-full pl-10 pr-10 py-3 rounded-lg border focus:ring-2 outline-none text-lg ${selectedClient ? 'border-green-500 bg-green-50 focus:ring-green-500' : 'border-gray-200 focus:ring-blue-500'}`}
-              value={selectedClient ? `${selectedClient.nombre}` : clientSearch}
-              onChange={e => {
-                const val = e.target.value;
-                setClientSearch(val);
-                setShowClientResults(true);
-                const exactMatch = clients.find(c => c.nombre.toLowerCase() === val.toLowerCase());
-                if (exactMatch) {
-                  onSelectClient?.(exactMatch);
-                  setShowClientResults(false);
-                } else if (selectedClient) {
-                  onSelectClient?.(null);
-                }
-              }}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && filteredClients.length > 0) {
-                  onSelectClient?.(filteredClients[0]);
-                  setShowClientResults(false);
-                  setClientSearch('');
-                  e.target.blur();
-                }
-              }}
-              onFocus={() => setShowClientResults(true)}
-              onBlur={() => {
-                setTimeout(() => {
-                  if (!selectedClient && clientSearch && filteredClients.length > 0) {
-                    onSelectClient?.(filteredClients[0]);
-                    setClientSearch('');
+          <div className="relative w-1/2 flex items-center gap-2" ref={clientResultsRef}>
+            <div className="relative flex-1">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input 
+                type="text" 
+                placeholder={t('Search Client...', 'Search Client...')} 
+                className={`w-full pl-10 pr-10 py-3 rounded-lg border focus:ring-2 outline-none text-lg ${selectedClient ? 'border-green-500 bg-green-50 focus:ring-green-500' : 'border-gray-200 focus:ring-blue-500'}`}
+                value={selectedClient ? `${selectedClient.nombre}` : clientSearch}
+                onChange={e => {
+                  const val = e.target.value;
+                  setClientSearch(val);
+                  setShowClientResults(true);
+                  const exactMatch = clients.find(c => c.nombre.toLowerCase() === val.toLowerCase());
+                  if (exactMatch) {
+                    onSelectClient?.(exactMatch);
+                    setShowClientResults(false);
+                  } else if (selectedClient) {
+                    onSelectClient?.(null);
                   }
-                  setShowClientResults(false);
-                }, 200);
-              }}
-            />
-            {selectedClient && (
-              <button 
-                onClick={() => {
-                  onSelectClient?.(null);
-                  setClientSearch('');
                 }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"
-              >
-                <CloseIcon className="w-5 h-5" />
-              </button>
-            )}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && filteredClients.length > 0) {
+                    onSelectClient?.(filteredClients[0]);
+                    setShowClientResults(false);
+                    setClientSearch('');
+                    e.target.blur();
+                  }
+                }}
+                onFocus={() => setShowClientResults(true)}
+                onBlur={() => {
+                  setTimeout(() => {
+                    if (!selectedClient && clientSearch && filteredClients.length > 0) {
+                      onSelectClient?.(filteredClients[0]);
+                      setClientSearch('');
+                    }
+                    setShowClientResults(false);
+                  }, 200);
+                }}
+              />
+              {selectedClient && (
+                <button 
+                  onClick={() => {
+                    onSelectClient?.(null);
+                    setClientSearch('');
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"
+                >
+                  <CloseIcon className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+            
+            <button 
+              onClick={onAddClient}
+              className="p-3 bg-white text-gray-400 rounded-lg border border-gray-200 hover:bg-emerald-50 hover:text-emerald-500 transition-colors shadow-sm"
+              title="Add Client"
+            >
+              <UserPlus className="w-5 h-5" />
+            </button>
 
             {/* Client Results Dropdown */}
             {showClientResults && clientSearch && !selectedClient && (

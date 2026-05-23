@@ -10,7 +10,7 @@ import { CreateClientModal } from './CreateClientModal';
 import { CreatePromoModal } from './CreatePromoModal';
 import { Product, Client, Salesman, Order, Inventory, Category, Tax, Device, StoreSettings, Vendor, PurchaseOrder, BusinessCategory, Modifier, ModifierGroup, GlobalModifierGroup } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_CLIENTS, INITIAL_SALESMEN, INITIAL_CATEGORIES, INITIAL_TAXES, INITIAL_DEVICES, INITIAL_VENDORS, DEFAULT_BUSINESS_CATEGORIES } from '../constants';
-import { LayoutDashboard, Package, Users, Briefcase, Tags, Settings, ShoppingCart, Archive, ArrowLeft, Plus, Download, Upload, Printer as PrinterIcon, Trophy, TrendingUp, Menu, X, Truck, FileText, Search, Mail, Trash2, CheckCircle, Building2, Tag, RefreshCw, Sparkles, ShieldCheck, ListFilter, Copy, CreditCard, LayoutGrid, Hand, Grid, ChefHat } from 'lucide-react';
+import { LayoutDashboard, Package, Users, Briefcase, Tags, Settings, ShoppingCart, Archive, ArrowLeft, Plus, Download, Upload, Printer as PrinterIcon, Trophy, TrendingUp, Menu, X, Truck, FileText, Search, Mail, Trash2, CheckCircle, Building2, Tag, RefreshCw, Sparkles, ShieldCheck, ListFilter, Copy, CreditCard, LayoutGrid, Hand, Grid, ChefHat, Globe, Edit2 } from 'lucide-react';
 import { doc, deleteDoc, setDoc, writeBatch, collection, getDocs, updateDoc, query, where, addDoc, onSnapshot } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import Papa from 'papaparse';
@@ -4738,6 +4738,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </>
         );
       }
+
       case 'Settings':
         return (
           <div className="space-y-8">
@@ -5603,11 +5604,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <div className="flex-1 overflow-y-auto p-4 md:p-8 print:p-0 print:overflow-visible flex flex-col items-center">
               {(() => {
-                const isWholesale = businessCategory?.enabledFields?.printA4 || businessCategory?.name?.toLowerCase().includes('wholesale') || storeSettings.nombre?.toLowerCase().includes('wholesale');
-                const displayFormat = (['restaurant', 'combo'].includes(businessCategory?.id || '') && !isWholesale) ? 'ticket' :
-                                     (businessCategory?.enabledFields?.printA4 ? 'invoice' : 
-                                     (businessCategory?.enabledFields?.thermal80mm ? 'ticket' : 
-                                     (isWholesale ? 'invoice' : (storeSettings.printFormat || 'ticket'))));
+                const isWholesale = businessCategory?.id === 'wholesale' ||
+                                    (!['restaurant', 'retail', 'grocery', 'combo'].includes(businessCategory?.id || '')) && (
+                                      (businessCategory?.name?.toLowerCase().includes('wholesale')) ||
+                                      (storeSettings.nombre?.toLowerCase().includes('wholesale'))
+                                    );
+                const displayFormat = ['restaurant', 'retail', 'grocery', 'combo'].includes(businessCategory?.id || '')
+                  ? (storeSettings.printFormat || 'ticket')
+                  : 'invoice';
                 const orderSubtotal = (selectedOrder.articulos || []).reduce((acc, item) => acc + ((item.precio || 0) * (item.cantidad || 1)), 0);
                 
                 return displayFormat === 'invoice' ? (
@@ -5625,6 +5629,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       paymentMethod={selectedOrder.metodoPago}
                       creditTerm={selectedOrder.terminosCredito}
                       splits={selectedOrder.splits}
+                      bills={selectedOrder.bills}
                     />
                   </div>
                 ) : (
@@ -5641,6 +5646,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       totalCredit={selectedOrder.total || 0}
                       paymentMethod={selectedOrder.metodoPago}
                       splits={selectedOrder.splits}
+                      bills={selectedOrder.bills}
                     />
                   </div>
                 );

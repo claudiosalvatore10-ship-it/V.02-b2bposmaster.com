@@ -58,7 +58,14 @@ service cloud.firestore {
       allow get: if isValidId(storeId);
       allow list: if isStoreUser(resource.data.id) || isSuperAdmin();
       allow create: if isSignedIn();
-      allow update: if isValidId(storeId) && isAdmin() && (storeId == getStoreId() || isSuperAdmin()) && (isSuperAdmin() || !incoming().diff(existing()).affectedKeys().hasAny(['licenseKey', 'isActive', 'subscriptionAmount']));
+      allow update: if isValidId(storeId) && isAdmin() && (storeId == getStoreId() || isSuperAdmin()) && (
+        isSuperAdmin() || 
+        !incoming().diff(existing()).affectedKeys().hasAny(['licenseKey', 'isActive', 'subscriptionAmount']) ||
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly(['isActive']) &&
+          incoming().get('isActive', false) == true
+        )
+      );
       allow delete: if isSuperAdmin();
     }
 

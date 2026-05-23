@@ -95,6 +95,8 @@ const MainPOS: React.FC = () => {
   const [showStoreSetup, setShowStoreSetup] = useState(false);
   const [globalConfig, setGlobalConfig] = useState<{ announcement: string; maintenance: boolean }>({ announcement: '', maintenance: false });
   const [lastOrderData, setLastOrderData] = useState<Partial<Order> | null>(null);
+  const [activationKeyInput, setActivationKeyInput] = useState('');
+  const [isActivating, setIsActivating] = useState(false);
 
   useEffect(() => {
     const unsubGlobal = onSnapshot(doc(db, 'system', 'config'), (snapshot) => {
@@ -965,32 +967,119 @@ const MainPOS: React.FC = () => {
   }
 
   if (view !== 'admin' && storeSettings?.isActive === false) {
+    const handleActivateLicense = async () => {
+      if (!activationKeyInput.trim()) {
+        toast.error('Por favor, ingresa una clave de licencia.');
+        return;
+      }
+      setIsActivating(true);
+      try {
+        const storeRef = doc(db, 'settings', storeSettings.id);
+        const storeSnap = await getDoc(storeRef);
+        if (!storeSnap.exists()) {
+          toast.error('No se pudo encontrar el negocio registrado.');
+          setIsActivating(false);
+          return;
+        }
+
+        const latestData = storeSnap.data();
+        const expectedKey = latestData.licenseKey || '';
+
+        if (activationKeyInput.trim().toUpperCase() === expectedKey.trim().toUpperCase()) {
+          await setDoc(storeRef, { isActive: true }, { merge: true });
+          toast.success('¡Felicidades! Tu negocio ha sido activado con éxito.');
+          setStoreSettings(prev => ({ ...prev, isActive: true }));
+        } else {
+          toast.error('La clave de licencia ingresada es incorrecta o inválida.');
+        }
+      } catch (error: any) {
+        console.error("Error activating store license:", error);
+        toast.error(`Error al activar: ${error.message}`);
+      } finally {
+        setIsActivating(false);
+      }
+    };
+
+    const handleUnlinkStore = async () => {
+      if (!user) return;
+      try {
+        await setDoc(doc(db, 'users', user.uid), { storeId: null }, { merge: true });
+        setUserStoreId(null);
+        setShowStoreSetup(true);
+        toast.info('Negocio desvinculado. Ahora puedes configurar un nuevo negocio o unirte a otro.');
+      } catch (error: any) {
+        console.error("Error unlinking store:", error);
+        toast.error(`Error al desvincular: ${error.message}`);
+      }
+    };
+
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-50 p-8">
-        <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-2xl text-center border border-red-100">
-          <div className="w-20 h-20 bg-red-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-red-100 mx-auto mb-6">
+      <div className="h-screen flex items-center justify-center bg-slate-900 p-8">
+        <div className="max-w-md w-full bg-slate-800 p-8 rounded-3xl shadow-2xl text-center border border-slate-700 text-white">
+          <div className="w-20 h-20 bg-rose-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-rose-900/40 mx-auto mb-6 animate-pulse animate-duration-1000">
             <ShieldAlert className="w-10 h-10" />
           </div>
-          <h1 className="text-3xl font-black text-gray-900 mb-2 tracking-tight">License Required</h1>
-          <p className="text-gray-500 mb-8 font-medium">This application is not activated. Please contact support to obtain a valid license key.</p>
-          <div className="p-4 bg-gray-50 rounded-xl mb-6 text-left">
-            <p className="text-xs font-bold text-gray-400 uppercase mb-1">Store ID</p>
-            <p className="font-mono text-sm text-gray-700">{storeSettings.id || 'N/A'}</p>
+          <h1 className="text-3xl font-black text-white mb-2 tracking-tight">Licencia Requerida</h1>
+          <p className="text-slate-400 mb-6 font-medium text-sm leading-relaxed">
+            Este negocio no está activo. Por favor, ingresa una clave de licencia válida para desbloquear la aplicación.
+          </p>
+          
+          <div className="p-4 bg-slate-900/50 rounded-2xl mb-6 text-left border border-slate-700/60">
+            <p className="text-[10px] font-bold text-slate-500 uppercase mb-1 tracking-wider">Store ID (ID de Comercio)</p>
+            <p className="font-mono text-sm text-cyan-400 font-bold select-all">{storeSettings.id || 'N/A'}</p>
           </div>
-          {(userRole === 'admin' || effectiveIsSuperAdmin) && (
-            <button 
-              onClick={() => setView('admin')}
-              className="w-full py-4 bg-gray-900 text-white font-black rounded-2xl hover:bg-black transition-all flex items-center justify-center gap-3 mb-3"
+
+          {/* Form to activate license */}
+          <div className="bg-slate-900/30 p-5 rounded-2xl border border-slate-700/40 mb-6 text-left animate-fade-in">
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Ingresar Clave de Licencia</label>
+            <input
+              type="text"
+              className="w-full bg-slate-900/80 text-white font-mono placeholder-slate-600 px-4 py-3 rounded-xl border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition text-center text-base"
+              placeholder="LIC-XXXXXX"
+              value={activationKeyInput}
+              onChange={(e) => setActivationKeyInput(e.target.value)}
+              disabled={isActivating}
+            />
+            <button
+              onClick={handleActivateLicense}
+              disabled={isActivating}
+              className="w-full mt-3 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition duration-200 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              Go to Admin Settings
+              {isActivating ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Verificando...
+                </>
+              ) : (
+                'Activar Aplicación'
+              )}
             </button>
-          )}
-          <button 
-            onClick={handleLogout}
-            className="w-full py-4 bg-white text-gray-500 font-bold rounded-2xl border border-gray-200 hover:bg-gray-50 transition-all flex items-center justify-center gap-3"
-          >
-            <LogOut className="w-4 h-4" /> Logout
-          </button>
+          </div>
+
+          <div className="space-y-3">
+            <button 
+              onClick={handleUnlinkStore}
+              className="w-full py-3 bg-slate-800 text-slate-300 font-bold hover:text-white rounded-xl border border-slate-700 hover:bg-slate-700 hover:border-slate-600 transition flex items-center justify-center gap-2 text-sm"
+            >
+              <RefreshCw className="w-4 h-4" /> Configurar otro negocio (NEW & EXISTING)
+            </button>
+            
+            {(userRole === 'admin' || effectiveIsSuperAdmin) && (
+              <button 
+                onClick={() => setView('admin')}
+                className="w-full py-3 bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 font-bold rounded-xl transition flex items-center justify-center gap-2 text-sm"
+              >
+                Go to Admin Settings
+              </button>
+            )}
+            
+            <button 
+              onClick={handleLogout}
+              className="w-full py-3 bg-slate-900 hover:bg-slate-950 text-slate-400 hover:text-slate-200 font-bold rounded-xl transition flex items-center justify-center gap-2 text-sm"
+            >
+              <LogOut className="w-4 h-4" /> Cerrar Sesión (Logout)
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1168,15 +1257,16 @@ const MainPOS: React.FC = () => {
   const creditSurcharge = storeSettings.creditSurcharge || 4;
   const totalCredit = totalCash * (1 + creditSurcharge / 100);
 
-  const isWholesale = (selectedClient && selectedClient.terminosCredito && selectedClient.terminosCredito !== 'CASH/TODAY') ||
-                      (businessCategory?.enabledFields?.printA4) ||
-                      (businessCategory?.name?.toLowerCase().includes('wholesale')) ||
-                      (storeSettings.nombre?.toLowerCase().includes('wholesale'));
+  const isWholesale = businessCategory?.id === 'wholesale' ||
+                      (!['restaurant', 'retail', 'grocery', 'combo'].includes(businessCategory?.id || '')) && (
+                        (selectedClient && selectedClient.terminosCredito && selectedClient.terminosCredito !== 'CASH/TODAY') ||
+                        (businessCategory?.name?.toLowerCase().includes('wholesale')) ||
+                        (storeSettings.nombre?.toLowerCase().includes('wholesale'))
+                      );
 
-  const displayFormat = (['restaurant', 'combo'].includes(businessCategory?.id || '') && !isWholesale) ? 'ticket' :
-                        (businessCategory?.enabledFields?.printA4 ? 'invoice' : 
-                        (businessCategory?.enabledFields?.thermal80mm ? 'ticket' : 
-                        (isWholesale ? 'invoice' : (storeSettings.printFormat || 'ticket'))));
+  const displayFormat = ['restaurant', 'retail', 'grocery', 'combo'].includes(businessCategory?.id || '')
+    ? (storeSettings.printFormat || 'ticket')
+    : 'invoice';
 
   const filteredCategories = businessCategory?.id === 'combo' 
     ? categories.filter(c => c.moduleType === comboView) 
@@ -1447,6 +1537,8 @@ const MainPOS: React.FC = () => {
                 cart={isReceiveMode ? receiveCart : cart}
                 onAddToCart={handleAddToCart}
                 onUpdateQuantity={handleUpdateQuantity}
+                onToggleReceiveMode={(mode) => setIsReceiveMode(mode)}
+                onAddClient={() => { setIsCreatingClient(true); setShowSideMenu(false); }}
                 onUpdateItem={(cartId, updates) => {
                   if (isReceiveMode) {
                     setReceiveCart(prev => prev.map(item => item.cartId === cartId ? { ...item, ...updates } : item));
@@ -1505,6 +1597,7 @@ const MainPOS: React.FC = () => {
                 clients={clients}
                 selectedClient={selectedClient}
                 onSelectClient={setSelectedClient}
+                onAddClient={() => { setIsCreatingClient(true); setShowSideMenu(false); }}
                 onToggleFeatured={(p) => setFeaturedProduct(featuredProduct?.id === p.id ? null : p)}
                 featuredProductId={featuredProduct?.id}
                 businessCategory={businessCategory}
@@ -1884,6 +1977,7 @@ const MainPOS: React.FC = () => {
               creditSurcharge={creditSurcharge}
               paymentMethod={lastOrderData?.metodoPago}
               splits={lastOrderData?.splits}
+              bills={lastOrderData?.bills}
             />
           ) : (
             <TicketPreview 
@@ -1900,6 +1994,7 @@ const MainPOS: React.FC = () => {
               creditSurcharge={creditSurcharge}
               paymentMethod={lastOrderData?.metodoPago}
               splits={lastOrderData?.splits}
+              bills={lastOrderData?.bills}
             />
           )
         )}
@@ -1964,6 +2059,12 @@ const App: React.FC = () => {
         if (formData) {
           localStorage.setItem('quick_demo_data', JSON.stringify(formData));
         }
+        
+        // Force a new anonymous session to ensure a new Store is created
+        if (auth.currentUser) {
+          await signOut(auth);
+        }
+        
         await signInAnonymously(auth);
         toast.success('¡Registro de 48h exitoso! Configurando demo...');
         window.location.hash = '#pos';

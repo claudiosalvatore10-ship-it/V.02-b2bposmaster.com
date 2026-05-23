@@ -53,10 +53,12 @@ export const FloatingOrderSummary: React.FC<FloatingOrderSummaryProps> = ({
   const [selectedTipPercentage, setSelectedTipPercentage] = useState<number>(0);
   const [customTip, setCustomTip] = useState<string>('');
 
-  const isWholesale = (client && client.terminosCredito && client.terminosCredito !== 'CASH/TODAY') ||
-                      (storeSettings?.nombre?.toLowerCase().includes('wholesale')) ||
-                      (businessCategory?.name?.toLowerCase().includes('wholesale')) ||
-                      false;
+  const isWholesale = businessCategory?.id === 'wholesale' ||
+                      (!['restaurant', 'retail', 'grocery', 'combo'].includes(businessCategory?.id || '')) && (
+                        (client && client.terminosCredito && client.terminosCredito !== 'CASH/TODAY') ||
+                        (storeSettings?.nombre?.toLowerCase().includes('wholesale')) ||
+                        (businessCategory?.name?.toLowerCase().includes('wholesale'))
+                      );
 
   const handleFloatingClick = () => {
     if (isWholesale) {
