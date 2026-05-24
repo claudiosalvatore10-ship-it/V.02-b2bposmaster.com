@@ -4,7 +4,8 @@ import { db } from '../firebase';
 import { toast } from 'sonner';
 import { 
   Save, RefreshCw, Sparkles, Image, Layout, HelpCircle, FileText, Check, AlignLeft,
-  Zap, Shield, BarChart3, Globe, Smartphone, Clock, Monitor, ShoppingCart, ChefHat, Layers, Grid
+  Zap, Shield, BarChart3, Globe, Smartphone, Clock, Monitor, ShoppingCart, ChefHat, Layers, Grid,
+  Upload
 } from 'lucide-react';
 
 const presetImages = [
@@ -71,6 +72,73 @@ export const LandingCMS: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<LandingPageData>(DEFAULT_LANDING_DATA);
+  const [dragActive, setDragActive] = useState(false);
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const processFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('El archivo debe ser una imagen (JPG, PNG, WebP...)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1000;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+          setConfig(prev => ({ ...prev, heroImage: dataUrl }));
+          toast.success('¡Foto procesada y cargada con éxito!');
+        }
+      };
+      img.onerror = () => {
+        toast.error('Error al procesar el archivo de imagen.');
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleChangeFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    if (e.target.files && e.target.files[0]) {
+      processFile(e.target.files[0]);
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -253,14 +321,72 @@ export const LandingCMS: React.FC = () => {
                 </div>
 
                 <div className="border-t border-gray-100 pt-6">
-                  <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-3">Foto / Imagen Ilustrativa del Héroe</label>
-                  <input 
-                    type="url" 
-                    value={config.heroImage}
-                    onChange={e => setConfig({ ...config, heroImage: e.target.value })}
-                    className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono text-xs text-gray-500 mb-4"
-                    placeholder="Escribe o pega una URL de imagen HTTPS..."
-                  />
+                  <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <Image className="w-4 h-4 text-blue-600" />
+                    Foto / Imagen de Portada del Héroe
+                  </label>
+
+                  {/* Drag and Drop Zone */}
+                  <div 
+                    onDragEnter={handleDrag}
+                    onDragOver={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDrop={handleDrop}
+                    className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all bg-gray-50/50 mb-4 cursor-pointer relative ${
+                      dragActive 
+                        ? 'border-blue-500 bg-blue-50/30 ring-2 ring-blue-100' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <input 
+                      type="file" 
+                      id="hero-image-upload"
+                      accept="image/*"
+                      onChange={handleChangeFile}
+                      className="hidden" 
+                    />
+                    <label 
+                      htmlFor="hero-image-upload" 
+                      className="cursor-pointer flex flex-col items-center justify-center space-y-3"
+                    >
+                      <div className="w-12 h-12 bg-blue-100/70 text-blue-600 rounded-full flex items-center justify-center border border-blue-200">
+                        <Upload className="w-5 h-5" />
+                      </div>
+                      <div className="flex flex-col items-center space-y-2">
+                        <p className="text-sm font-semibold text-gray-400">Arrastra tu foto de portada aquí, o</p>
+                        <span className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm hover:shadow-md cursor-pointer">
+                          <Upload className="w-4 h-4" /> Importar Foto desde mi PC
+                        </span>
+                        <p className="text-[10px] text-gray-400 font-medium pt-1">Formatos permitidos: PNG, JPG, JPEG, WEBP. Se optimizará automáticamente.</p>
+                      </div>
+                    </label>
+
+                    {/* Quick Preview inside dropzone if custom image is set */}
+                    {config.heroImage && (
+                      <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-center gap-4">
+                        <div className="relative w-20 h-12 rounded-lg border border-gray-200 overflow-hidden bg-white shadow-sm flex-shrink-0">
+                          <img src={config.heroImage} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-[11px] font-bold text-gray-800">Imagen actual de la portada</p>
+                          <p className="text-[9px] text-gray-400 font-semibold truncate max-w-sm">
+                            {config.heroImage.startsWith('data:') ? 'Imagen cargada desde tu dispositivo (Optimizada)' : config.heroImage}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-2">O si lo prefieres, pega una dirección URL (HTTPS) de imagen:</label>
+                    <input 
+                      type="url" 
+                      value={config.heroImage?.startsWith('data:') ? '' : config.heroImage}
+                      onChange={e => setConfig({ ...config, heroImage: e.target.value })}
+                      className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono text-xs text-gray-500 mb-4"
+                      placeholder="https://images.unsplash.com/photo-..."
+                    />
+                  </div>
                   
                   <div className="space-y-3">
                     <p className="text-xs font-bold text-gray-500">O haz clic para aplicar una de nuestras fotos preconfiguradas:</p>
