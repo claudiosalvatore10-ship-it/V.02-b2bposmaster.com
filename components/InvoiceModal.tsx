@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { toast } from 'sonner';
 import { TicketPreview, InvoicePreview } from './PrintPreviews';
 import { CartItem, Client, Salesman, Order, StoreSettings, Tax, BusinessCategory, Category } from '../types';
-import { X, Printer as PrinterIcon, Mail, CheckCircle, DollarSign, CreditCard, RefreshCw, FileText, Ticket } from 'lucide-react';
+import { X, Printer as PrinterIcon, Mail, CheckCircle, DollarSign, CreditCard, RefreshCw, FileText, Ticket, Sparkles } from 'lucide-react';
 import { QuantityControl } from './QuantityControl';
 import { db } from '../firebase';
 import { collection, addDoc } from 'firebase/firestore';
@@ -22,8 +22,9 @@ interface InvoiceModalProps {
   onUpdateQuantity?: (cartId: string, cantidad: number) => void;
   initialSelectedClient?: Client | null;
   onSelectClient?: (client: Client | null) => void;
-  initialPaymentMethod?: 'Cash' | 'Credit' | 'Check' | 'Split' | '';
+  initialPaymentMethod?: 'Cash' | 'Credit' | 'Check' | 'Split' | 'EBT' | '';
   initialTipAmount?: number;
+  onBarcodeClick?: (invoiceId: string) => void;
 }
 
 const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -67,11 +68,11 @@ const formatMoneyInput = (value: string) => {
   return amount.toFixed(2);
 };
 
-const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCategory, cart, clients, salesmen, taxes, categories, activeSalesmanId, isSuperAdmin, onClose, onComplete, onUpdateQuantity, initialSelectedClient, onSelectClient, initialPaymentMethod, initialTipAmount }) => {
+const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCategory, cart, clients, salesmen, taxes, categories, activeSalesmanId, isSuperAdmin, onClose, onComplete, onUpdateQuantity, initialSelectedClient, onSelectClient, initialPaymentMethod, initialTipAmount, onBarcodeClick }) => {
   const [selectedClient, setSelectedClient] = React.useState<string>(initialSelectedClient?.id || '');
   const [selectedSalesman, setSelectedSalesman] = React.useState<string>(activeSalesmanId || salesmen[0]?.id || '');
-  const [paymentMethod, setPaymentMethod] = React.useState<'Cash' | 'Credit' | 'Check' | 'Split' | ''>(initialPaymentMethod || '');
-  const [checkoutStep, setCheckoutStep] = React.useState<'method' | 'cash' | 'split' | 'check' | 'complete'>(
+  const [paymentMethod, setPaymentMethod] = React.useState<'Cash' | 'Credit' | 'Check' | 'Split' | 'EBT' | 'EBT + Cash' | 'EBT + Credit' | ''>(initialPaymentMethod || '');
+  const [checkoutStep, setCheckoutStep] = React.useState<'method' | 'cash' | 'split' | 'check' | 'complete' | 'ebt_split'>(
     initialPaymentMethod === 'Cash' ? 'cash' : 
     initialPaymentMethod === 'Check' ? 'check' :
     initialPaymentMethod === 'Split' ? 'split' :
@@ -83,7 +84,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
   const [tipPercentage, setTipPercentage] = React.useState<number>(0);
   const [customTip, setCustomTip] = React.useState<string>(initialTipAmount ? initialTipAmount.toString() : '');
   const [splitCount, setSplitCount] = React.useState(2);
-  const [splits, setSplits] = React.useState<{ amount: number; method: 'Cash' | 'Credit' }[]>([]);
+  const [splits, setSplits] = React.useState<{ amount: number; method: 'Cash' | 'Credit' | 'EBT' }[]>([]);
   const [amountTendered, setAmountTendered] = React.useState('');
   const [showReceiptOnMobile, setShowReceiptOnMobile] = React.useState(false);
   const [checkNumber, setCheckNumber] = React.useState('');
@@ -122,7 +123,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
 
   const [showWholesalePayment, setShowWholesalePayment] = React.useState(false);
 
-  const taxRate = taxes.reduce((acc, tax) => acc + (tax.porcentaje || 0), 0);
+  const taxRate = taxes.reduce((acc, tax) => acc + (tax.porcentaje !== undefined ? tax.porcentaje : ((tax as any).tasa ?? 0)), 0);
   const creditSurcharge = storeSettings.creditSurcharge || 4; // Default 4% if not set
   
   const subtotal = cart.reduce((acc, item) => {
@@ -139,13 +140,20 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
     }
     return acc + (((item.precio || 0) + modifierTotal) * ((item.descuento || 0) / 100)) * (item.cantidad || 1);
   }, 0);
-  let taxAmount = 0;
-  const taxesAppliedMap = new Map<string, { name: string, amount: number, rate: number }>();
+
+  // EBT split calculations
+  let ebtSubtotal = 0;
+  let ebtDiscount = 0;
+  let nonEbtSubtotal = 0;
+  let nonEbtDiscount = 0;
+  let nonEbtTaxAmount = 0;
+  const nonEbtTaxesAppliedMap = new Map<string, { name: string, amount: number, rate: number }>();
 
   cart.forEach(item => {
     const itemPrice = item.precio || 0;
     const modifierTotal = (item.selectedModifiers || []).reduce((sum, mod) => sum + (mod.precio || 0), 0);
     let itemTotal = 0;
+    let itemDiscountAmount = 0;
     
     if (item.promo?.type === 'quantity' && item.promo.quantity && item.promo.price) {
       const q = item.cantidad || 1;
@@ -153,51 +161,128 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
       const remainder = q % item.promo.quantity;
       const remainderTotal = (remainder * (itemPrice + modifierTotal)) * (1 - (item.descuento || 0) / 100);
       itemTotal = (sets * item.promo.price) + remainderTotal;
+      itemDiscountAmount = (((itemPrice + modifierTotal) * ((item.descuento || 0) / 100)) * remainder);
     } else {
       itemTotal = ((item.precio || 0) + modifierTotal) * (1 - (item.descuento || 0) / 100) * (item.cantidad || 1);
+      itemDiscountAmount = (((item.precio || 0) + modifierTotal) * ((item.descuento || 0) / 100)) * (item.cantidad || 1);
     }
     
     const category = categories.find(c => c.nombre === item.categoria);
+    const isEbtItem = category?.ebt === true;
     
-    if (category && category.taxIds && category.taxIds.length > 0) {
-      category.taxIds.forEach(taxId => {
-        const tax = taxes.find(t => t.id === taxId);
-        if (tax) {
-          const amount = itemTotal * ((tax.porcentaje || 0) / 100);
-          taxAmount += amount;
+    if (isEbtItem) {
+      ebtSubtotal += ((item.precio || 0) + modifierTotal) * (item.cantidad || 1);
+      ebtDiscount += itemDiscountAmount;
+    } else {
+      nonEbtSubtotal += ((item.precio || 0) + modifierTotal) * (item.cantidad || 1);
+      nonEbtDiscount += itemDiscountAmount;
+      
+      if (category && category.taxIds && category.taxIds.length > 0) {
+        category.taxIds.forEach(taxId => {
+          const tax = taxes.find(t => t.id === taxId);
+          if (tax) {
+            const rawRate = tax.porcentaje !== undefined ? tax.porcentaje : ((tax as any).tasa ?? 0);
+            const amount = itemTotal * (rawRate / 100);
+            nonEbtTaxAmount += amount;
+            
+            if (nonEbtTaxesAppliedMap.has(tax.id)) {
+              const existing = nonEbtTaxesAppliedMap.get(tax.id)!;
+              existing.amount += amount;
+            } else {
+              nonEbtTaxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: rawRate });
+            }
+          }
+        });
+      } else {
+        taxes.forEach(tax => {
+          const rawRate = tax.porcentaje !== undefined ? tax.porcentaje : ((tax as any).tasa ?? 0);
+          const amount = itemTotal * (rawRate / 100);
+          nonEbtTaxAmount += amount;
           
-          if (taxesAppliedMap.has(tax.id)) {
-            const existing = taxesAppliedMap.get(tax.id)!;
+          if (nonEbtTaxesAppliedMap.has(tax.id)) {
+            const existing = nonEbtTaxesAppliedMap.get(tax.id)!;
             existing.amount += amount;
           } else {
-            taxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: tax.porcentaje || 0 });
+            nonEbtTaxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: rawRate });
           }
-        }
-      });
-    } else {
-      taxes.forEach(tax => {
-        const amount = itemTotal * ((tax.porcentaje || 0) / 100);
-        taxAmount += amount;
-        
-        if (taxesAppliedMap.has(tax.id)) {
-          const existing = taxesAppliedMap.get(tax.id)!;
-          existing.amount += amount;
-        } else {
-          taxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: tax.porcentaje || 0 });
-        }
-      });
+        });
+      }
     }
   });
 
-  const taxesApplied = Array.from(taxesAppliedMap.values()).filter(t => t.rate > 0 || t.amount > 0);
-  const baseTotal = subtotal - discount + taxAmount;
+  const ebtTotal = ebtSubtotal - ebtDiscount;
+  const nonEbtBaseTotal = nonEbtSubtotal - nonEbtDiscount + nonEbtTaxAmount;
+
+  const isEbtSelected = paymentMethod === 'EBT' || paymentMethod?.startsWith('EBT') || checkoutStep === 'ebt_split';
   
+  let taxAmount = 0;
+  let taxesApplied = Array.from(nonEbtTaxesAppliedMap.values()).filter(t => t.rate > 0 || t.amount > 0);
+  
+  if (!isEbtSelected) {
+    let normalTaxAmount = 0;
+    const normalTaxesAppliedMap = new Map<string, { name: string, amount: number, rate: number }>();
+    
+    cart.forEach(item => {
+      const itemPrice = item.precio || 0;
+      const modifierTotal = (item.selectedModifiers || []).reduce((sum, mod) => sum + (mod.precio || 0), 0);
+      let itemTotal = 0;
+      
+      if (item.promo?.type === 'quantity' && item.promo.quantity && item.promo.price) {
+        const q = item.cantidad || 1;
+        const sets = Math.floor(q / item.promo.quantity);
+        const remainder = q % item.promo.quantity;
+        const remainderTotal = (remainder * (itemPrice + modifierTotal)) * (1 - (item.descuento || 0) / 100);
+        itemTotal = (sets * item.promo.price) + remainderTotal;
+      } else {
+        itemTotal = ((item.precio || 0) + modifierTotal) * (1 - (item.descuento || 0) / 100) * (item.cantidad || 1);
+      }
+      
+      const category = categories.find(c => c.nombre === item.categoria);
+      if (category && category.taxIds && category.taxIds.length > 0) {
+        category.taxIds.forEach(taxId => {
+          const tax = taxes.find(t => t.id === taxId);
+          if (tax) {
+            const rawRate = tax.porcentaje !== undefined ? tax.porcentaje : ((tax as any).tasa ?? 0);
+            const amount = itemTotal * (rawRate / 100);
+            normalTaxAmount += amount;
+            if (normalTaxesAppliedMap.has(tax.id)) {
+              normalTaxesAppliedMap.get(tax.id)!.amount += amount;
+            } else {
+              normalTaxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: rawRate });
+            }
+          }
+        });
+      } else {
+        taxes.forEach(tax => {
+          const rawRate = tax.porcentaje !== undefined ? tax.porcentaje : ((tax as any).tasa ?? 0);
+          const amount = itemTotal * (rawRate / 100);
+          normalTaxAmount += amount;
+          if (normalTaxesAppliedMap.has(tax.id)) {
+            normalTaxesAppliedMap.get(tax.id)!.amount += amount;
+          } else {
+            normalTaxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: rawRate });
+          }
+        });
+      }
+    });
+    
+    taxAmount = normalTaxAmount;
+    taxesApplied = Array.from(normalTaxesAppliedMap.values()).filter(t => t.rate > 0 || t.amount > 0);
+  } else {
+    taxAmount = nonEbtTaxAmount;
+  }
+  
+  const baseTotal = subtotal - discount + taxAmount;
   const tipAmount = tipPercentage > 0 ? (baseTotal * (tipPercentage / 100)) : (parseFloat(customTip) || 0);
-  const totalCash = baseTotal + tipAmount;
-  const totalCredit = (baseTotal * (1 + creditSurcharge / 100)) + tipAmount;
+
+  const nonEbtTotalCash = nonEbtBaseTotal + tipAmount;
+  const nonEbtTotalCredit = (nonEbtBaseTotal * (1 + creditSurcharge / 100)) + tipAmount;
+
+  const totalCash = isEbtSelected ? (ebtTotal + nonEbtTotalCash) : (baseTotal + tipAmount);
+  const totalCredit = isEbtSelected ? (ebtTotal + nonEbtTotalCredit) : ((baseTotal * (1 + creditSurcharge / 100)) + tipAmount);
 
   const currentTotal = paymentMethod === 'Credit' ? totalCredit : totalCash;
-  const changeDue = Math.max(0, (parseFloat(amountTendered) || 0) - currentTotal);
+  const changeDue = Math.max(0, (parseFloat(amountTendered) || 0) - (isEbtSelected && paymentMethod === 'EBT + Cash' ? nonEbtTotalCash : currentTotal));
 
   useEffect(() => {
     if (checkoutStep === 'split') {
@@ -260,29 +345,60 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
     }
   };
 
-  const handleComplete = () => {
+  const handleComplete = (overrideMethod?: typeof paymentMethod) => {
+    const activeMethod = overrideMethod || paymentMethod;
     const selectedClientObj = clients.find(c => c.id === selectedClient);
     
+    let finalTotal = totalCash;
+    let finalTaxAmount = taxAmount;
+    let finalTaxesApplied = taxesApplied;
+    let finalSplits = splits;
+    
+    if (activeMethod === 'Credit') {
+      finalTotal = totalCredit;
+    } else if (activeMethod === 'EBT') {
+      finalTotal = ebtTotal;
+      finalTaxAmount = 0;
+      finalTaxesApplied = [];
+      finalSplits = [{ amount: ebtTotal, method: 'EBT' }];
+    } else if (activeMethod === 'EBT + Cash') {
+      finalTotal = ebtTotal + nonEbtTotalCash;
+      finalTaxAmount = nonEbtTaxAmount;
+      finalTaxesApplied = Array.from(nonEbtTaxesAppliedMap.values()).filter(t => t.rate > 0 || t.amount > 0);
+      finalSplits = [
+        { amount: ebtTotal, method: 'EBT' },
+        { amount: nonEbtTotalCash, method: 'Cash' }
+      ];
+    } else if (activeMethod === 'EBT + Credit') {
+      finalTotal = ebtTotal + nonEbtTotalCredit;
+      finalTaxAmount = nonEbtTaxAmount;
+      finalTaxesApplied = Array.from(nonEbtTaxesAppliedMap.values()).filter(t => t.rate > 0 || t.amount > 0);
+      finalSplits = [
+        { amount: ebtTotal, method: 'EBT' },
+        { amount: nonEbtTotalCredit, method: 'Credit' }
+      ];
+    }
+
     onComplete({
       clienteId: selectedClient,
       cliente: selectedClientObj,
       vendedorId: selectedSalesman,
-      metodoPago: paymentMethod as any,
-      checkNumber: paymentMethod === 'Check' ? checkNumber : undefined,
-      montoLetras: paymentMethod === 'Check' ? amountInWords : undefined,
-      checkDate: paymentMethod === 'Check' ? dueDate : undefined,
+      metodoPago: activeMethod as any,
+      checkNumber: activeMethod === 'Check' ? checkNumber : undefined,
+      montoLetras: activeMethod === 'Check' ? amountInWords : undefined,
+      checkDate: activeMethod === 'Check' ? dueDate : undefined,
       terminosCredito: creditTerm,
-      creditCardType: paymentMethod === 'Credit' ? creditCardType : undefined,
-      creditCardLast4: paymentMethod === 'Credit' ? creditCardLast4 : undefined,
-      amountTendered: paymentMethod === 'Cash' ? parseFloat(amountTendered) || 0 : undefined,
-      changeDue: paymentMethod === 'Cash' ? changeDue : undefined,
-      bills: paymentMethod === 'Cash' ? bills : undefined,
-      tax: taxAmount,
-      taxesApplied: taxesApplied,
+      creditCardType: (activeMethod === 'Credit' || activeMethod === 'EBT + Credit') ? creditCardType : undefined,
+      creditCardLast4: (activeMethod === 'Credit' || activeMethod === 'EBT + Credit') ? creditCardLast4 : undefined,
+      amountTendered: (activeMethod === 'Cash' || activeMethod === 'EBT + Cash') ? parseFloat(amountTendered) || 0 : undefined,
+      changeDue: (activeMethod === 'Cash' || activeMethod === 'EBT + Cash') ? changeDue : undefined,
+      bills: (activeMethod === 'Cash' || activeMethod === 'EBT + Cash') ? bills : undefined,
+      tax: finalTaxAmount,
+      taxesApplied: finalTaxesApplied,
       taxRate: taxRate,
       tip: tipAmount,
-      total: currentTotal,
-      splits: paymentMethod === 'Split' ? splits : undefined,
+      total: finalTotal,
+      splits: (activeMethod === 'Split' || activeMethod?.startsWith('EBT')) ? finalSplits : undefined,
       articulos: cart,
       estado: 'Pagado',
       fecha: Date.now(),
@@ -337,7 +453,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">SELECCIONE MÉTODO</span>
               <span className="text-3xl lg:text-4xl font-black text-gray-900 mb-4 lg:mb-6">${totalCash.toFixed(2)}</span>
 
-              <div className="w-full max-w-md grid grid-cols-4 gap-2">
+              <div className="w-full max-w-lg grid grid-cols-5 gap-2">
                 <button 
                   onClick={() => { setPaymentMethod('Cash'); setCheckoutStep('cash'); }}
                   className="bg-white p-3 rounded-2xl border-2 border-gray-100 hover:border-green-500 hover:shadow-lg transition-all group flex flex-col items-center gap-1"
@@ -376,6 +492,28 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
                     <RefreshCw className="w-5 h-5" />
                   </div>
                   <span className="text-[9px] font-black text-gray-900 uppercase tracking-widest">DIVIDIR</span>
+                </button>
+
+                <button 
+                  onClick={() => {
+                    if (ebtTotal <= 0) {
+                      toast.error('No hay artículos elegibles para EBT SNAP en la orden.');
+                      return;
+                    }
+                    if (nonEbtSubtotal > 0) {
+                      setPaymentMethod('EBT');
+                      setCheckoutStep('ebt_split');
+                    } else {
+                      setPaymentMethod('EBT');
+                      handleComplete('EBT');
+                    }
+                  }}
+                  className="bg-white p-3 rounded-2xl border-2 border-gray-100 hover:border-emerald-500 hover:shadow-lg transition-all group flex flex-col items-center gap-1"
+                >
+                  <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <span className="text-[9px] font-black text-amber-900 uppercase tracking-widest">EBT</span>
                 </button>
               </div>
             </div>
@@ -619,7 +757,90 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
             </div>
           </div>
         );
+
+      case 'ebt_split':
+        return (
+          <div className="flex-1 flex flex-col p-4 lg:p-8 bg-gray-50/30 overflow-y-auto">
+            <div className="flex-1 flex flex-col items-center justify-center">
+              <div className="bg-white p-6 lg:p-8 rounded-[2rem] border-2 border-gray-100 w-full max-w-md text-center mb-6 lg:mb-8 relative overflow-hidden">
+                <div className="absolute top-0 right-0 bg-emerald-500 text-white px-4 py-1 rounded-bl-2xl text-[10px] font-black uppercase tracking-widest">
+                  EBT CUBIERTO: ${ebtTotal.toFixed(2)}
+                </div>
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">CANTIDAD RESTANTE</span>
+                <div className="flex flex-col gap-1 my-3">
+                  <span className="text-3xl font-black text-green-600">${nonEbtTotalCash.toFixed(2)} <span className="text-[10px] text-gray-400 font-bold block">SI PAGA EN EFECTIVO</span></span>
+                  <span className="text-3xl font-black text-blue-600">${nonEbtTotalCredit.toFixed(2)} <span className="text-[10px] text-gray-400 font-bold block">SI PAGA CON TARJETA</span></span>
+                </div>
+                <p className="text-xs text-amber-600 font-bold mt-2">¿Cómo desea pagar el cliente el saldo pendiente?</p>
+              </div>
+
+              <div className="w-full max-w-md grid grid-cols-2 gap-4">
+                <button 
+                  onClick={() => {
+                    setPaymentMethod('EBT + Cash');
+                    setCheckoutStep('cash');
+                  }}
+                  className="bg-white p-6 rounded-2xl border-2 border-gray-100 hover:border-green-500 hover:shadow-lg transition-all group flex flex-col items-center gap-2"
+                >
+                  <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center text-green-600 group-hover:bg-green-600 group-hover:text-white transition-all">
+                    <DollarSign className="w-6 h-6" />
+                  </div>
+                  <span className="text-xs font-black text-gray-900 uppercase tracking-widest">PAGAR EFECTIVO</span>
+                  <span className="text-[10px] font-bold text-gray-500">${nonEbtTotalCash.toFixed(2)}</span>
+                </button>
+
+                <button 
+                  onClick={() => {
+                    setPaymentMethod('EBT + Credit');
+                    handleComplete('EBT + Credit');
+                  }}
+                  className="bg-white p-6 rounded-2xl border-2 border-gray-100 hover:border-blue-500 hover:shadow-lg transition-all group flex flex-col items-center gap-2"
+                >
+                  <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                    <CreditCard className="w-6 h-6" />
+                  </div>
+                  <span className="text-xs font-black text-gray-900 uppercase tracking-widest">PAGAR TARJETA</span>
+                  <span className="text-[10px] font-bold text-gray-500">${nonEbtTotalCredit.toFixed(2)}</span>
+                </button>
+              </div>
+
+              <div className="mt-8">
+                <button 
+                  onClick={() => {
+                    setCheckoutStep('method');
+                    setPaymentMethod('');
+                  }} 
+                  className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-gray-200 transition-all"
+                >
+                  ATRÁS / CANCELAR
+                </button>
+              </div>
+            </div>
+          </div>
+        );
     }
+  };
+
+  const getDisplaySplits = () => {
+    if (checkoutStep === 'ebt_split') {
+      return [
+        { amount: ebtTotal, method: 'EBT' },
+        { amount: nonEbtTotalCash, method: 'Debe (Cash/Card)' }
+      ];
+    }
+    if (paymentMethod === 'EBT + Cash') {
+      return [
+        { amount: ebtTotal, method: 'EBT' },
+        { amount: nonEbtTotalCash, method: 'Cash' }
+      ];
+    }
+    if (paymentMethod === 'EBT + Credit') {
+      return [
+        { amount: ebtTotal, method: 'EBT' },
+        { amount: nonEbtTotalCredit, method: 'Credit' }
+      ];
+    }
+    return splits;
   };
 
   return (
@@ -655,7 +876,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
         {/* Content */}
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
           {/* Left Side: Receipt Preview */}
-          <div className={`${showReceiptOnMobile ? 'flex' : 'hidden lg:flex'} w-full ${displayFormat === 'invoice' ? 'lg:flex-1' : 'lg:w-[400px]'} bg-gray-100/50 p-6 lg:p-8 flex flex-col items-center justify-center lg:border-r border-gray-100 overflow-y-auto print:p-0 print:w-full print:bg-white print:border-none`}>
+          <div className={`${showReceiptOnMobile ? 'flex' : 'hidden lg:flex'} w-full ${displayFormat === 'invoice' ? 'lg:flex-1' : 'lg:w-[400px]'} bg-gray-100/50 p-6 lg:p-8 flex flex-col items-center justify-center lg:border-r border-gray-100 overflow-y-auto print:block print:p-0 print:w-full print:bg-white print:border-none`}>
             {displayFormat === 'invoice' ? (
               <InvoicePreview 
                 cart={cart}
@@ -672,8 +893,9 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
                 paymentMethod={paymentMethod}
                 creditTerm={creditTerm}
                 dueDate={dueDate}
-                splits={splits}
+                splits={getDisplaySplits()}
                 bills={bills}
+                onBarcodeClick={onBarcodeClick}
               />
             ) : (
               <TicketPreview 
@@ -688,8 +910,9 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ storeSettings, businessCate
                 totalCredit={totalCredit}
                 creditSurcharge={creditSurcharge}
                 paymentMethod={paymentMethod}
-                splits={splits}
+                splits={getDisplaySplits()}
                 bills={bills}
+                onBarcodeClick={onBarcodeClick}
               />
             )}
             <div className="mt-8 flex gap-4 print:hidden w-full max-w-2xl">

@@ -7,7 +7,8 @@ import {
   Trash2, CreditCard, DollarSign, Wallet, 
   Tag, Package, ChevronRight, Calculator,
   Grid, List, Sparkles, Smartphone,
-  MinusCircle, PlusCircle, X, Truck, UserPlus, Percent, Star
+  MinusCircle, PlusCircle, X, Truck, UserPlus, Percent, Star,
+  RefreshCw, ArrowLeft
 } from 'lucide-react';
 import { Product, CartItem, StoreSettings, Category, Tax, BusinessCategory, Salesman, Vendor } from '../types';
 import { EditCartItemModal } from './EditCartItemModal';
@@ -20,7 +21,8 @@ interface GroceryViewProps {
   onUpdateQuantity: (cartId: string, quantity: number) => void;
   onUpdateItem?: (cartId: string, updates: Partial<CartItem>) => void;
   onRemoveItem: (cartId: string) => void;
-  onCheckout: (details?: { invoiceNumber: string, checkRef: string, vendorId: string }) => void;
+  onClearCart?: () => void;
+  onCheckout: (details?: { invoiceNumber?: string, checkRef?: string, vendorId?: string, paymentMethod?: 'Cash' | 'Credit' | 'Check' | 'Split' | 'EBT' | '' }) => void;
   storeSettings: StoreSettings;
   businessCategory: BusinessCategory | null;
   activeSalesman: Salesman | null;
@@ -28,6 +30,7 @@ interface GroceryViewProps {
   onToggleReceiveMode?: (mode: boolean) => void;
   onAddClient?: () => void;
   vendors?: Vendor[];
+  onRefundClick?: () => void;
 }
 
 export const GroceryView: React.FC<GroceryViewProps> = ({
@@ -38,6 +41,7 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
   onUpdateQuantity,
   onUpdateItem,
   onRemoveItem,
+  onClearCart,
   onCheckout,
   storeSettings,
   businessCategory,
@@ -45,7 +49,8 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
   isReceiveMode = false,
   onToggleReceiveMode,
   onAddClient,
-  vendors = []
+  vendors = [],
+  onRefundClick
 }) => {
   const { t } = useTranslation();
   const [numpadValue, setNumpadValue] = useState<string>('0.00');
@@ -124,7 +129,7 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
 
   const featuredItems = products.filter(p => {
     if (selectedCategory) return p.categoria === selectedCategory;
-    return quickAccessCategories.length > 0 ? quickAccessCategories.includes(p.categoria) : true;
+    return quickAccessCategories.includes(p.categoria);
   });
 
   const subtotal = cart.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
@@ -168,8 +173,17 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
                  >
                    <UserPlus className="w-4 h-4" />
                  </button>
-                 <button className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-emerald-50 hover:text-emerald-600 transition-all shadow-sm border border-slate-100">
-                   <Plus className="w-4 h-4" />
+                 <button 
+                   onClick={() => {
+                     if (cart.length > 0 && confirm('¿Desea borrar todo el ticket?')) {
+                       onClearCart?.();
+                     }
+                   }}
+                   disabled={cart.length === 0}
+                   className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-red-50 hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm border border-slate-100"
+                   title="Borrar todo el ticket"
+                 >
+                   <Trash2 className="w-4 h-4" />
                  </button>
                  <button 
                   onClick={() => {
@@ -202,18 +216,26 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
              </div>
 
           {isReceiveMode && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Select Vendor</label>
-              <select 
-                value={selectedVendorId}
-                onChange={(e) => setSelectedVendorId(e.target.value)}
-                className="w-full bg-white border border-blue-200 text-slate-800 text-sm font-bold rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all"
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => onToggleReceiveMode?.(false)}
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-200 py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
               >
-                <option value="">-- Choose Vendor --</option>
-                {vendors.map(v => (
-                  <option key={v.id} value={v.id}>{v.nombre}</option>
-                ))}
-              </select>
+                <ArrowLeft className="w-4 h-4 text-slate-500" /> Volver a Ventas
+              </button>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Select Vendor</label>
+                <select 
+                  value={selectedVendorId}
+                  onChange={(e) => setSelectedVendorId(e.target.value)}
+                  className="w-full bg-white border border-blue-200 text-slate-800 text-sm font-bold rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all"
+                >
+                  <option value="">-- Choose Vendor --</option>
+                  {vendors.map(v => (
+                    <option key={v.id} value={v.id}>{v.nombre}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
         </div>
@@ -228,42 +250,56 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
               <p className="text-slate-400 text-xs">{t('Type amount and select department or item.', 'Ingrese el monto y seleccione el producto.')}</p>
             </div>
           ) : (
-            <AnimatePresence initial={false}>
-              {cart.map((item) => (
-                <motion.div
-                  key={item.cartId}
-                  layout
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  onDoubleClick={() => setEditingCartItem(item)}
-                  className="flex justify-between items-start group py-2 border-b border-dashed border-slate-100 last:border-none cursor-pointer hover:bg-slate-50 transition-colors rounded-lg px-2 -mx-2"
-                >
-                  <div className="flex-1 pr-2">
-                    <h4 className="font-bold text-slate-800 text-sm leading-tight">{item.nombre}</h4>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                      {item.cantidad.toFixed(2)} x ${item.precio.toFixed(2)}
-                    </p>
-                    {(!businessCategory || businessCategory.enabledFields.serialNumber) && onUpdateItem && (
-                      <input 
-                        type="text"
-                        placeholder="Serial Number"
-                        value={item.serialNumber || ''}
-                        onChange={(e) => onUpdateItem(item.cartId, { serialNumber: e.target.value })}
-                        className="mt-1 w-full text-xs p-1 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-blue-500"
-                      />
-                    )}
-                  </div>
-                  <div className="text-right flex flex-col items-end">
-                    <p className="font-black text-slate-900">${(item.precio * item.cantidad).toFixed(2)}</p>
-                    <div className="flex gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => onUpdateQuantity(item.cartId, item.cantidad - 1)} className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50"><MinusCircle className="w-4 h-4" /></button>
-                      <button onClick={() => onUpdateQuantity(item.cartId, item.cantidad + 1)} className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50"><PlusCircle className="w-4 h-4" /></button>
+            <>
+              <AnimatePresence initial={false}>
+                {cart.map((item) => (
+                  <motion.div
+                    key={item.cartId}
+                    layout
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    onDoubleClick={() => setEditingCartItem(item)}
+                    className="flex justify-between items-start group py-2 border-b border-dashed border-slate-100 last:border-none cursor-pointer hover:bg-slate-50 transition-colors rounded-lg px-2 -mx-2"
+                  >
+                    <div className="flex-1 pr-2">
+                      <h4 className="font-bold text-slate-800 text-sm leading-tight">{item.nombre}</h4>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                        {item.cantidad.toFixed(2)} x ${item.precio.toFixed(2)}
+                      </p>
+                      {(!businessCategory || businessCategory.enabledFields.serialNumber) && onUpdateItem && (
+                        <input 
+                          type="text"
+                          placeholder="Serial Number"
+                          value={item.serialNumber || ''}
+                          onChange={(e) => onUpdateItem(item.cartId, { serialNumber: e.target.value })}
+                          className="mt-1 w-full text-xs p-1 border border-slate-200 rounded text-slate-700 focus:outline-none focus:border-blue-500"
+                        />
+                      )}
                     </div>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                    <div className="text-right flex flex-col items-end">
+                      <p className="font-black text-slate-900">${(item.precio * item.cantidad).toFixed(2)}</p>
+                      <div className="flex gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => onUpdateQuantity(item.cartId, item.cantidad - 1)} className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50"><MinusCircle className="w-4 h-4" /></button>
+                        <button onClick={() => onUpdateQuantity(item.cartId, item.cantidad + 1)} className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50"><PlusCircle className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              <div className="pt-4 pb-2 flex justify-end shrink-0">
+                <button
+                  onClick={() => {
+                    if (confirm('¿Está seguro de que desea borrar todo el ticket actual?')) {
+                      onClearCart?.();
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-xs font-black transition-all shadow-sm uppercase tracking-wider"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Borrar todo el ticket
+                </button>
+              </div>
+            </>
           )}
         </div>
 
@@ -473,6 +509,31 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
                                    />
                                 </div>
                               </div>
+                              {(() => {
+                                const prices = p.vendorPrices || [];
+                                if (prices.length === 0) return null;
+                                const cheaperWholesaler = prices.reduce((cheapest, current) => {
+                                  return current.costo < cheapest.costo ? current : cheapest;
+                                }, prices[0]);
+
+                                const activeCost = currentInput.cost !== '' ? parseFloat(currentInput.cost) : (p.costo || 0);
+
+                                if (cheaperWholesaler && activeCost > cheaperWholesaler.costo) {
+                                  const difference = activeCost - cheaperWholesaler.costo;
+                                  return (
+                                    <div className="bg-amber-50 rounded-xl p-2.5 border border-amber-200/60 text-amber-800 text-[11px] leading-tight flex items-start gap-2 mt-1">
+                                      <span className="text-amber-500 text-xs">⚠️</span>
+                                      <div className="flex-1">
+                                        <p className="font-extrabold uppercase tracking-widest text-[9px] text-amber-700">Mejor Costo Disponible</p>
+                                        <p className="mt-0.5 font-bold">
+                                          <span className="text-amber-900 font-black">{cheaperWholesaler.vendorName}</span> vende esto a <span className="text-emerald-500 font-extrabold">${cheaperWholesaler.costo.toFixed(2)}</span> (ahorras <span className="font-extrabold">${difference.toFixed(2)}</span>)
+                                        </p>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
                            </div>
                          );
                        })}
@@ -482,14 +543,16 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
              </div>
           ) : (
             <div className="space-y-4">
-               <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">{selectedCategory || 'ALL ITEMS'}</span>
+               <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">{selectedCategory || 'QUICK ACCESS'}</span>
                {quickAccessViewMode === 'grid' ? (
                  <div className="grid grid-cols-2 gap-3 xl:gap-4">
                    {featuredItems.length === 0 ? (
                       <div className="col-span-2 py-10 flex flex-col items-center justify-center text-center opacity-40">
                          <Star className="w-10 h-10 mb-4 text-slate-400" />
-                         <span className="text-sm font-bold text-slate-700">No products found.</span>
-                         <span className="text-[10px] uppercase tracking-widest text-slate-500 mt-2">Adjust categories or catalog.</span>
+                         <span className="text-sm font-bold text-slate-700">{selectedCategory ? "No products found." : "No active Quick Access items."}</span>
+                         <span className="text-[10px] uppercase tracking-widest text-slate-500 mt-2">
+                           {selectedCategory ? "Adjust categories or catalog." : "Activate Quick Access for categories in Admin Settings."}
+                         </span>
                       </div>
                    ) : featuredItems.map(p => (
                      <motion.button
@@ -526,8 +589,10 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
                    {featuredItems.length === 0 ? (
                       <div className="col-span-2 py-10 flex flex-col items-center justify-center text-center opacity-40">
                          <Star className="w-10 h-10 mb-4 text-slate-400" />
-                         <span className="text-sm font-bold text-slate-700">No products found.</span>
-                         <span className="text-[10px] uppercase tracking-widest text-slate-500 mt-2">Adjust categories or catalog.</span>
+                         <span className="text-sm font-bold text-slate-700">{selectedCategory ? "No products found." : "No active Quick Access items."}</span>
+                         <span className="text-[10px] uppercase tracking-widest text-slate-500 mt-2">
+                           {selectedCategory ? "Adjust categories or catalog." : "Activate Quick Access for categories in Admin Settings."}
+                         </span>
                       </div>
                    ) : featuredItems.map(p => (
                      <motion.button
@@ -567,7 +632,28 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
               <motion.button
                 key={cat.id}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => setSelectedCategory(cat.nombre)}
+                onClick={() => {
+                  const amountVal = parseFloat(numpadValue);
+                  if (amountVal > 0) {
+                    const genericProduct: Product = {
+                      id: `GEN-${cat.id || String(Math.random())}-${Date.now()}`,
+                      upc: '',
+                      sku: '',
+                      nombre: `Venta ${cat.nombre}`,
+                      precio: amountVal,
+                      costo: 0,
+                      categoria: cat.nombre,
+                      stock: 9999,
+                      imagenUrl: '',
+                      descuento: 0
+                    };
+                    onAddToCart(genericProduct, 1);
+                    setNumpadValue('0.00');
+                    toast.success(`Agregado: ${cat.nombre} $${amountVal.toFixed(2)}`);
+                  } else {
+                    setSelectedCategory(selectedCategory === cat.nombre ? null : cat.nombre);
+                  }
+                }}
                 style={{ 
                   backgroundColor: cat.color || '#ffffff', 
                   borderColor: selectedCategory === cat.nombre ? '#34d399' : (cat.borderColor || '#f1f5f9') 
@@ -646,7 +732,7 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
               </div>
 
               <button 
-                onClick={() => onCheckout()}
+                onClick={() => onCheckout({ paymentMethod: 'Cash' })}
                 className="flex-[1.5] bg-[#ffab73] text-white rounded-2xl shadow-sm hover:bg-[#ff9c5a] transition-all active:scale-95 flex flex-col items-center justify-center"
               >
                  <span className="text-[9px] xl:text-[10px] font-black uppercase tracking-[0.2em] opacity-90">Exact</span>
@@ -654,15 +740,22 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
               </button>
               
               <button 
-                 onClick={() => onCheckout()}
+                 onClick={() => onCheckout({ paymentMethod: 'Cash' })}
                  className="flex-1 bg-[#86dcb2] text-white rounded-2xl font-black text-lg xl:text-xl uppercase tracking-widest shadow-sm hover:bg-[#70cf9d] transition-all active:scale-95">
                  CASH
               </button>
               
               <div className="flex-1 flex gap-2">
-                 <button onClick={() => onCheckout()} className="flex-1 bg-[#ff8fa6] text-white rounded-xl shadow-sm font-black text-xs xl:text-sm uppercase tracking-widest hover:bg-[#ff7994] transition-all active:scale-95">Credit</button>
-                 <button onClick={() => onCheckout()} className="flex-1 bg-[#83b1ff] text-white rounded-xl shadow-sm font-black text-xs xl:text-sm uppercase tracking-widest hover:bg-[#6c9ef1] transition-all active:scale-95">EBT</button>
+                 <button onClick={() => onCheckout({ paymentMethod: 'Credit' })} className="flex-1 bg-[#ff8fa6] text-white rounded-xl shadow-sm font-black text-xs xl:text-sm uppercase tracking-widest hover:bg-[#ff7994] transition-all active:scale-95">Credit</button>
+                 <button onClick={() => onCheckout({ paymentMethod: 'EBT' })} className="flex-1 bg-[#83b1ff] text-white rounded-xl shadow-sm font-black text-xs xl:text-sm uppercase tracking-widest hover:bg-[#6c9ef1] transition-all active:scale-95">EBT</button>
               </div>
+
+              <button 
+                 onClick={onRefundClick}
+                 className="h-10 bg-red-500 hover:bg-red-600 text-white rounded-xl font-black text-[13px] uppercase tracking-widest shadow-sm transition-all active:scale-95 flex items-center justify-center gap-2"
+              >
+                 <RefreshCw className="w-3.5 h-3.5" /> REFUND
+              </button>
            </div>
         </div>
       </div>
@@ -681,6 +774,10 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
                 cantidad: updatedItem.cantidad
               });
             }
+            setEditingCartItem(null);
+          }}
+          onDelete={(cartId) => {
+            onRemoveItem(cartId);
             setEditingCartItem(null);
           }}
         />

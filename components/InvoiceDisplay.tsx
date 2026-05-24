@@ -15,6 +15,7 @@ interface InvoiceDisplayProps {
   onUpdatePayment?: (updates: Partial<Inventory>) => void;
   onComplete?: () => void;
   storeSettings?: StoreSettings;
+  onBarcodeClick?: (invoiceId: string) => void;
 }
 
 const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({ 
@@ -25,7 +26,8 @@ const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
   onClose, 
   onUpdatePayment, 
   onComplete, 
-  storeSettings 
+  storeSettings,
+  onBarcodeClick
 }) => {
   const [showReceiptOnMobile, setShowReceiptOnMobile] = React.useState(false);
   const [isFullscreenPreview, setIsFullscreenPreview] = React.useState(false);
@@ -114,6 +116,7 @@ const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
                 splits={order?.splits}
                 invoiceId={data.id || data.invoiceNumber || data.factura}
                 bills={data.bills}
+                onBarcodeClick={onBarcodeClick}
               />
             ) : (
               <InvoicePreview 
@@ -133,6 +136,7 @@ const InvoiceDisplay: React.FC<InvoiceDisplayProps> = ({
                 splits={order?.splits}
                 invoiceId={data.id || data.invoiceNumber || data.factura}
                 bills={data.bills}
+                onBarcodeClick={onBarcodeClick}
               />
             )}
           </div>

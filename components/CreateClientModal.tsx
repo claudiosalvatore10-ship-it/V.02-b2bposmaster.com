@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Client, Salesman } from '../types';
+import { formatPhoneNumber } from '../utils';
 
 interface CreateClientModalProps {
   onClose: () => void;
@@ -35,7 +36,7 @@ export const CreateClientModal = ({ onClose, onSave, salesmen = [], activeSalesm
         <h2 className="text-xl font-bold text-gray-800 mb-4">Add New Client</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input required type="text" placeholder="Nombre" value={client.nombre || ''} onChange={e => setClient({...client, nombre: e.target.value})} className="w-full p-2 border rounded font-bold" />
-          <input type="text" placeholder="Teléfono" value={client.telefono || ''} onChange={e => setClient({...client, telefono: e.target.value})} className="w-full p-2 border rounded font-bold" />
+          <input type="text" placeholder="Teléfono" value={client.telefono || ''} onChange={e => setClient({...client, telefono: formatPhoneNumber(e.target.value)})} className="w-full p-2 border rounded font-bold" />
           <input type="text" placeholder="Direccion" value={client.direccion || ''} onChange={e => setClient({...client, direccion: e.target.value})} className="w-full p-2 border rounded font-bold" />
           <div className="grid grid-cols-2 gap-2">
             <input type="text" placeholder="Ciudad" value={client.ciudad || ''} onChange={e => setClient({...client, ciudad: e.target.value})} className="w-full p-2 border rounded font-bold" />

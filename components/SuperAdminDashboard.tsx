@@ -3,13 +3,14 @@ import { Building2, Users, Package, Settings, Search, Trash2, ShieldCheck, Spark
 import { collection, onSnapshot, query, doc, deleteDoc, updateDoc, setDoc, getDocs, writeBatch, addDoc, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, handleFirestoreError, OperationType } from '../firebase';
-import { StoreSettings, User, BusinessCategory, Salesman, SuperAdminItem, SuperAdminInvoice, GlobalModifierGroup } from '../types';
+import { StoreSettings, User, BusinessCategory, Salesman, SuperAdminItem, SuperAdminInvoice, GlobalModifierGroup, MerchantRegistration } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_PRODUCTS, INITIAL_STORE_SETTINGS, DEFAULT_BUSINESS_CATEGORIES } from '../constants';
 import { toast } from 'sonner';
 import { GoogleGenAI } from "@google/genai";
 import Papa from 'papaparse';
 import { read, utils, writeFile } from 'xlsx';
 import { LandingCMS } from './LandingCMS';
+import { formatPhoneNumber } from '../utils';
 
 interface SuperAdminDashboardProps {
   onLogout: () => void;
@@ -24,7 +25,7 @@ const ALL_RUBRO_FIELDS = [
 ];
 
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onSelectStore }) => {
-  const [activeTab, setActiveTab] = useState<'stores' | 'users' | 'updates' | 'catalog' | 'catalog_images' | 'rubros' | 'billing' | 'demos' | 'landing_cms'>('stores');
+  const [activeTab, setActiveTab] = useState<'stores' | 'users' | 'updates' | 'catalog' | 'catalog_images' | 'rubros' | 'billing' | 'demos' | 'landing_cms' | 'merchants'>('stores');
   const [stores, setStores] = useState<StoreSettings[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [businessCategories, setBusinessCategories] = useState<BusinessCategory[]>([]);
@@ -34,6 +35,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
   const [globalCatalog, setGlobalCatalog] = useState<any[]>([]);
   const [globalImages, setGlobalImages] = useState<any[]>([]);
   const [demoRequests, setDemoRequests] = useState<any[]>([]);
+  const [merchantRegistrations, setMerchantRegistrations] = useState<MerchantRegistration[]>([]);
+  const [selectedReg, setSelectedReg] = useState<MerchantRegistration | null>(null);
+  const [zoomImg, setZoomImg] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingKey, setIsGeneratingKey] = useState<string | null>(null);
@@ -409,7 +413,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
               apellido: item.Apellido || item.apellido || item.LastName || '',
               codigo: String(item.Codigo || item.codigo || item.Code || ''),
               email: item.Email || item.email || '',
-              telefono: item.Telefono || item.telefono || item.Phone || '',
+              telefono: formatPhoneNumber(String(item.Telefono || item.telefono || item.Phone || '')),
               activo: true,
               pin: String(item.PIN || item.pin || '1111')
             }));
@@ -458,7 +462,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
               storeId: smartImportTargetStore,
               nombre: item.Nombre || item.nombre || item.Name || '',
               contacto: item.Contacto || item.contacto || item.Contact || '',
-              telefono: item.Telefono || item.telefono || item.Phone || '',
+              telefono: formatPhoneNumber(String(item.Telefono || item.telefono || item.Phone || '')),
               email: item.Email || item.email || '',
               direccion: item.Direccion || item.direccion || item.Address || '',
               terminos: item.Terminos || item.terminos || item.Terms || ''
@@ -507,7 +511,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
               id: clientId,
               storeId: smartImportTargetStore,
               nombre: item.Nombre || item.nombre || item.Name || '',
-              telefono: item.Telefono || item.telefono || item.Phone || '',
+              telefono: formatPhoneNumber(String(item.Telefono || item.telefono || item.Phone || '')),
               direccion: item.Direccion || item.direccion || item.Address || '',
               ciudad: item.Ciudad || item.ciudad || item.City || '',
               estado: item.Estado || item.estado || item.State || '',
@@ -987,6 +991,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
       setDemoRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    // Merchant Onboarding Registrations
+    const unsubMerchants = onSnapshot(collection(db, 'merchantRegistrations'), (snapshot) => {
+      setMerchantRegistrations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MerchantRegistration)));
+    });
+
     return () => {
       unsubStores();
       unsubUsers();
@@ -997,6 +1006,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
       unsubSAItems();
       unsubSAInvoices();
       unsubDemoRequests();
+      unsubMerchants();
     };
   }, []);
 
@@ -1465,6 +1475,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
               )}
             </button>
             <button
+              onClick={() => setActiveTab('merchants')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 ${activeTab === 'merchants' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <CreditCard className="w-4 h-4" /> Merchant Onboarding
+              {merchantRegistrations.filter(r => r.status === 'pending').length > 0 && (
+                <span className="bg-amber-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-extrabold shadow-sm animate-pulse">
+                  {merchantRegistrations.filter(r => r.status === 'pending').length}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => setActiveTab('landing_cms')}
               className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 ${activeTab === 'landing_cms' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
@@ -1860,6 +1881,444 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'merchants' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Merchant Onboarding Applications</h2>
+                <p className="text-sm text-slate-500 font-medium">Review and process merchant credit card processing applications submitted by sales reps</p>
+              </div>
+            </div>
+            
+            <div className="p-4 border-b border-slate-100 flex gap-4 bg-white">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filter by DBA name, Owner, Sales rep, SSN or Bank routing..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-slate-800 font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-slate-100">
+                    <th className="px-6 py-4">Submission Date</th>
+                    <th className="px-6 py-4">Store DBA Name</th>
+                    <th className="px-6 py-4">Legal Name</th>
+                    <th className="px-6 py-4">Owner Name</th>
+                    <th className="px-6 py-4">Sales Rep</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {merchantRegistrations.length === 0 ? (
+                    <tr><td colSpan={7} className="p-8 text-center text-slate-400">No merchant registrations submitted yet.</td></tr>
+                  ) : (
+                    merchantRegistrations
+                      .filter(reg => {
+                        const q = searchQuery.toLowerCase().trim();
+                        if (!q) return true;
+                        return (
+                          reg.busStoreNameDba?.toLowerCase().includes(q) ||
+                          reg.busLegalName?.toLowerCase().includes(q) ||
+                          `${reg.ownerFirstName} ${reg.ownerLastName}`.toLowerCase().includes(q) ||
+                          reg.salesmanName?.toLowerCase().includes(q) ||
+                          reg.ownerSsn?.includes(q) ||
+                          reg.bankRoutingNumber?.includes(q)
+                        );
+                      })
+                      .sort((a, b) => b.createdAt - a.createdAt)
+                      .map((reg) => (
+                        <tr key={reg.id} className="hover:bg-slate-50 transition">
+                          <td className="px-6 py-4 text-sm font-medium text-slate-600">
+                            {new Date(reg.createdAt).toLocaleString()}
+                          </td>
+                          <td className="px-6 py-4 font-bold text-slate-900">{reg.busStoreNameDba}</td>
+                          <td className="px-6 py-4 text-sm text-slate-700 font-medium">{reg.busLegalName}</td>
+                          <td className="px-6 py-4 text-sm text-slate-700 font-medium">
+                            {reg.ownerFirstName} {reg.ownerLastName}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-600 font-medium">
+                            {reg.salesmanName}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                              reg.status === 'approved' 
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : reg.status === 'rejected'
+                                  ? 'bg-red-50 text-red-700 border border-red-200'
+                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}>
+                              {reg.status || 'pending'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => setSelectedReg(reg)}
+                                className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg transition"
+                              >
+                                Review Details
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (confirm('Are you sure you want to delete this application record?')) {
+                                    try {
+                                      await deleteDoc(doc(db, 'merchantRegistrations', reg.id));
+                                      toast.success('Registration deleted successfully');
+                                    } catch (err) {
+                                      toast.error('Failed to delete registration');
+                                    }
+                                  }
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-red-500 transition rounded-lg hover:bg-slate-100"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Application Detail Overlaid Modal */}
+            {selectedReg && (
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col text-slate-800">
+                  
+                  {/* Modal Header */}
+                  <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <div>
+                      <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">
+                        Reviewing Merchant File
+                      </span>
+                      <h3 className="text-xl font-extrabold text-slate-950 mt-1">{selectedReg.busStoreNameDba}</h3>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">Submitted by rep: {selectedReg.salesmanName} on {new Date(selectedReg.createdAt).toLocaleString()}</p>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedReg(null)}
+                      className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl transition"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Modal Body */}
+                  <div className="p-6 md:p-8 overflow-y-auto space-y-8 flex-1 text-left">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      
+                      {/* Left Column: Owner & Bank Info */}
+                      <div className="space-y-6">
+                        {/* Owner Section */}
+                        <div className="bg-slate-50/50 rounded-2xl border border-slate-200/60 p-5 space-y-4">
+                          <h4 className="text-sm font-black text-slate-900 border-b border-slate-200 pb-2 uppercase tracking-wider flex items-center gap-2">
+                            <Users className="w-4.5 h-4.5 text-blue-600" />
+                            Owner Info (Datos del Dueño)
+                          </h4>
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">Name:</span>
+                              <span className="font-extrabold text-slate-800">{selectedReg.ownerFirstName} {selectedReg.ownerLastName}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">DOB:</span>
+                              <span className="font-extrabold text-slate-800">{selectedReg.ownerDob}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">SSN:</span>
+                              <span className="font-extrabold text-slate-800 tracking-wider font-mono">{selectedReg.ownerSsn}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">Country:</span>
+                              <span className="font-extrabold text-slate-800">{selectedReg.ownerCountry}</span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-slate-400 font-bold uppercase block">Cell Phone:</span>
+                              <span className="font-extrabold text-slate-800 font-mono">{selectedReg.ownerCellPhone}</span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-slate-400 font-bold uppercase block">Email:</span>
+                              <span className="font-extrabold text-slate-800">{selectedReg.ownerEmail}</span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-slate-400 font-bold uppercase block">Home Address:</span>
+                              <span className="font-extrabold text-slate-800">{selectedReg.ownerHomeAddress} {selectedReg.ownerApartment && `, Apt ${selectedReg.ownerApartment}`}</span>
+                              <span className="font-semibold text-slate-600 block">{selectedReg.ownerCity}, {selectedReg.ownerState}, {selectedReg.ownerZipCode}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Bank Details */}
+                        <div className="bg-slate-50/50 rounded-2xl border border-slate-200/60 p-5 space-y-4">
+                          <h4 className="text-sm font-black text-slate-900 border-b border-slate-200 pb-2 uppercase tracking-wider flex items-center gap-2">
+                            <CreditCard className="w-4.5 h-4.5 text-blue-600" />
+                            Funds Settlements & Projections
+                          </h4>
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div className="col-span-2">
+                              <span className="text-slate-400 font-bold uppercase block">Bank Name:</span>
+                              <span className="font-extrabold text-slate-800">{selectedReg.bankName}</span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-slate-400 font-bold uppercase block">Account Holder:</span>
+                              <span className="font-extrabold text-slate-800">{selectedReg.bankAccountHolder}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">Routing (9 Digits):</span>
+                              <span className="font-extrabold text-slate-800 font-mono tracking-wider">{selectedReg.bankRoutingNumber}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">Account:</span>
+                              <span className="font-extrabold text-slate-800 font-mono tracking-wider">{selectedReg.bankAccountNumber}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">Industry:</span>
+                              <span className="font-extrabold text-indigo-700">{selectedReg.bankIndustryType}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">Projected Monthly CC:</span>
+                              <span className="font-extrabold text-indigo-700">{selectedReg.bankProjectedMonthlyCreditCardCharges}</span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-slate-400 font-bold uppercase block font-semibold text-slate-500">Est. Store Yearly Sales:</span>
+                              <span className="font-extrabold text-slate-800">{selectedReg.bankProjectedYearlyStoreSales}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Column: Business Profile & Documents Preview */}
+                      <div className="space-y-6">
+                        {/* Business Section */}
+                        <div className="bg-slate-50/50 rounded-2xl border border-slate-200/60 p-5 space-y-4">
+                          <h4 className="text-sm font-black text-slate-900 border-b border-slate-200 pb-2 uppercase tracking-wider flex items-center gap-2">
+                            <Building2 className="w-4.5 h-4.5 text-blue-600" />
+                            Business Info (Datos del Comercio)
+                          </h4>
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">Store DBA:</span>
+                              <span className="font-extrabold text-slate-800">{selectedReg.busStoreNameDba}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">Corporate Legal:</span>
+                              <span className="font-extrabold text-slate-800">{selectedReg.busLegalName}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">Legal structure:</span>
+                              <span className="font-extrabold text-slate-800">{selectedReg.busLegalType}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">Tax ID / EIN:</span>
+                              <span className="font-extrabold text-slate-800 font-mono tracking-wider">{selectedReg.busTaxId}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">Store Phone:</span>
+                              <span className="font-extrabold text-slate-800 font-mono">{selectedReg.busPhone}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-bold uppercase block">Est. date:</span>
+                              <span className="font-extrabold text-slate-800">{selectedReg.busEstablishedDate}</span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-slate-400 font-bold uppercase block">Physical Address:</span>
+                              <span className="font-extrabold text-slate-800">{selectedReg.busPhysicalAddress}</span>
+                              <span className="font-semibold text-slate-600 block">{selectedReg.busCity}, {selectedReg.busState}, {selectedReg.busZipCode}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Uploaded Photos Section with zoom trigger */}
+                        <div className="bg-slate-50/50 rounded-2xl border border-slate-200/60 p-5 space-y-4">
+                          <h4 className="text-sm font-black text-slate-900 border-b border-slate-200 pb-2 uppercase tracking-wider flex items-center gap-2">
+                            <Upload className="w-4.5 h-4.5 text-blue-600" />
+                            Visual Attachments Docs (Soportes)
+                          </h4>
+                          <div className="grid grid-cols-2 gap-4">
+                            {selectedReg.docDriversLicense ? (
+                              <div className="border border-slate-200 rounded-xl bg-white p-2.5 flex flex-col items-center justify-between shadow-sm">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase mb-1 text-center truncate w-full">Driver's License</span>
+                                <img 
+                                  src={selectedReg.docDriversLicense} 
+                                  alt="DL Document" 
+                                  onClick={() => setZoomImg(selectedReg.docDriversLicense)}
+                                  className="h-16 w-auto object-cover rounded cursor-pointer hover:opacity-85 transition border border-slate-100"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setZoomImg(selectedReg.docDriversLicense)}
+                                  className="text-[10px] text-blue-600 font-bold hover:underline mt-1.5"
+                                >
+                                  Zoom View 🔍
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="border border-slate-200 border-dashed rounded-xl bg-white p-4 flex flex-col items-center justify-center text-slate-300">
+                                <span className="text-[10px] uppercase font-bold text-slate-400">No DL Document</span>
+                              </div>
+                            )}
+
+                            {selectedReg.docVoidedCheck ? (
+                              <div className="border border-slate-200 rounded-xl bg-white p-2.5 flex flex-col items-center justify-between shadow-sm">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase mb-1 text-center truncate w-full">Voided Check</span>
+                                <img 
+                                  src={selectedReg.docVoidedCheck} 
+                                  alt="Check Document" 
+                                  onClick={() => setZoomImg(selectedReg.docVoidedCheck)}
+                                  className="h-16 w-auto object-cover rounded cursor-pointer hover:opacity-85 transition border border-slate-100"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setZoomImg(selectedReg.docVoidedCheck)}
+                                  className="text-[10px] text-blue-600 font-bold hover:underline mt-1.5"
+                                >
+                                  Zoom View 🔍
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="border border-slate-200 border-dashed rounded-xl bg-white p-4 flex flex-col items-center justify-center text-slate-300">
+                                <span className="text-[10px] uppercase font-bold text-slate-400">No Check Document</span>
+                              </div>
+                            )}
+
+                            {selectedReg.docBusinessLicense ? (
+                              <div className="border border-slate-200 rounded-xl bg-white p-2.5 flex flex-col items-center justify-between shadow-sm">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase mb-1 text-center truncate w-full">Biz License / EIN</span>
+                                <img 
+                                  src={selectedReg.docBusinessLicense} 
+                                  alt="Biz Document" 
+                                  onClick={() => setZoomImg(selectedReg.docBusinessLicense)}
+                                  className="h-16 w-auto object-cover rounded cursor-pointer hover:opacity-85 transition border border-slate-100"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setZoomImg(selectedReg.docBusinessLicense)}
+                                  className="text-[10px] text-blue-600 font-bold hover:underline mt-1.5"
+                                >
+                                  Zoom View 🔍
+                                </button>
+                              </div>
+                            ) : null}
+
+                            {selectedReg.docAdditional_1 ? (
+                              <div className="border border-slate-200 rounded-xl bg-white p-2.5 flex flex-col items-center justify-between shadow-sm">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase mb-1 text-center truncate w-full">Adicional Doc</span>
+                                <img 
+                                  src={selectedReg.docAdditional_1} 
+                                  alt="Additional Document" 
+                                  onClick={() => setZoomImg(selectedReg.docAdditional_1)}
+                                  className="h-16 w-auto object-cover rounded cursor-pointer hover:opacity-85 transition border border-slate-100"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setZoomImg(selectedReg.docAdditional_1)}
+                                  className="text-[10px] text-blue-600 font-bold hover:underline mt-1.5"
+                                >
+                                  Zoom View 🔍
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Additional Notes review row */}
+                    {selectedReg.notes && (
+                      <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-5 text-sm text-amber-800">
+                        <span className="font-extrabold uppercase block text-xs tracking-wider text-amber-900 mb-1">Rep Notes (Mensaje de la Solicitud):</span>
+                        "{selectedReg.notes}"
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Modal Footer Controls */}
+                  <div className="p-6 border-t border-slate-100 flex items-center justify-between bg-slate-50">
+                    <button
+                      onClick={() => setSelectedReg(null)}
+                      className="px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-sm rounded-xl transition"
+                    >
+                      Close Window
+                    </button>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await updateDoc(doc(db, 'merchantRegistrations', selectedReg.id), { status: 'rejected' });
+                            toast.success('Onboarding Application REJECTED/DENIED');
+                            setSelectedReg(null);
+                          } catch (err) {
+                            toast.error('Failed to update status');
+                          }
+                        }}
+                        disabled={selectedReg.status === 'rejected'}
+                        className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition disabled:opacity-35"
+                      >
+                        Reject Application
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          try {
+                            await updateDoc(doc(db, 'merchantRegistrations', selectedReg.id), { status: 'approved' });
+                            toast.success('Onboarding Application APPROVED successfully!');
+                            setSelectedReg(null);
+                          } catch (err) {
+                            toast.error('Failed to update status');
+                          }
+                        }}
+                        disabled={selectedReg.status === 'approved'}
+                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition shadow-lg shadow-emerald-100 disabled:opacity-35"
+                      >
+                        Approve Merchant
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            )}
+
+            {/* Immersive Zoom Lightbox Overlay */}
+            {zoomImg && (
+              <div 
+                className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"
+                onClick={() => setZoomImg(null)}
+              >
+                <div className="relative max-w-4xl max-h-[85vh] w-full flex flex-col justify-between items-center text-white">
+                  <button 
+                    onClick={() => setZoomImg(null)}
+                    className="absolute -top-10 right-0 text-white hover:text-slate-300 font-medium text-sm bg-black/40 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+                  >
+                    <X className="w-4 h-4" /> Close Zoom (Presionar para cerrar)
+                  </button>
+                  <img 
+                    src={zoomImg} 
+                    alt="Document Full Zoom" 
+                    className="w-full h-auto max-h-[80vh] object-contain rounded-lg border border-slate-700"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -3293,7 +3752,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
                   <input
                     type="tel"
                     value={editingStoreData.telefono || ''}
-                    onChange={(e) => setEditingStoreData({ ...editingStoreData, telefono: e.target.value })}
+                    onChange={(e) => setEditingStoreData({ ...editingStoreData, telefono: formatPhoneNumber(e.target.value) })}
                     className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 font-bold text-slate-900"
                   />
                 </div>

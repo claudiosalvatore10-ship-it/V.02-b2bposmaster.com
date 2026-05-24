@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import Papa from 'papaparse';
 import { read, utils, writeFile } from 'xlsx';
 import { QuantityControl } from './QuantityControl';
+import { formatPhoneNumber } from '../utils';
 
 interface AdminDashboardProps {
   onBack: () => void;
@@ -538,7 +539,7 @@ const ModifierGroupEditor = ({ onSave, onCancel, initialGroup }: { onSave: (grou
   );
 };
 
-const CreateProductModal = ({ onClose, onSave, categories, initialProduct, globalImages = [], businessCategory, globalModifierGroups = [], initialModuleType }: any) => {
+const CreateProductModal = ({ onClose, onSave, categories, initialProduct, globalImages = [], businessCategory, globalModifierGroups = [], initialModuleType, vendors = [] }: any) => {
     const [product, setProduct] = useState<Partial<Product>>({
     upc: '',
     boxBarcode: '',
@@ -559,12 +560,60 @@ const CreateProductModal = ({ onClose, onSave, categories, initialProduct, globa
     descuento: 0,
     imagenUrl: '',
     showInPOS: true,
+    vendorPrices: [],
     ...initialProduct
   });
 
   const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>(initialProduct?.modifierGroups || []);
   const [imagePreview, setImagePreview] = useState<string>(product.imagenUrl || '');
   const [isImportingFromLibrary, setIsImportingFromLibrary] = useState(false);
+  const [selectedVendorPriceId, setSelectedVendorPriceId] = useState('');
+  const [vendorPriceValue, setVendorPriceValue] = useState('');
+
+  const cheapestVendorPrice = useMemo(() => {
+    const prices = product.vendorPrices || [];
+    if (prices.length === 0) return null;
+    return prices.reduce((cheapest, current) => {
+      return current.costo < cheapest.costo ? current : cheapest;
+    }, prices[0]);
+  }, [product.vendorPrices]);
+
+  const handleAddVendorPrice = () => {
+    if (!selectedVendorPriceId || vendorPriceValue === '') {
+      toast.error('Selecciona un distribuidor y un costo');
+      return;
+    }
+    const vendorObj = vendors.find((v: any) => v.id === selectedVendorPriceId);
+    if (!vendorObj) return;
+
+    const existingPrices = product.vendorPrices || [];
+    const itemIndex = existingPrices.findIndex(item => item.vendorId === selectedVendorPriceId);
+    const updatedPrices = [...existingPrices];
+
+    const newPriceEntry = {
+      vendorId: selectedVendorPriceId,
+      vendorName: vendorObj.nombre,
+      costo: parseFloat(vendorPriceValue) || 0,
+      lastUpdated: Date.now()
+    };
+
+    if (itemIndex !== -1) {
+      updatedPrices[itemIndex] = newPriceEntry;
+    } else {
+      updatedPrices.push(newPriceEntry);
+    }
+
+    setProduct({ ...product, vendorPrices: updatedPrices });
+    setSelectedVendorPriceId('');
+    setVendorPriceValue('');
+    toast.success('Precio de distribuidor registrado');
+  };
+
+  const handleRemoveVendorPrice = (vendorId: string) => {
+    const updatedPrices = (product.vendorPrices || []).filter(item => item.vendorId !== vendorId);
+    setProduct({ ...product, vendorPrices: updatedPrices });
+    toast.success('Precio removido');
+  };
 
   const handleImportModifiersExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -948,6 +997,95 @@ const CreateProductModal = ({ onClose, onSave, categories, initialProduct, globa
             </div>
           </div>
 
+          {/* Wholesalers & Price Comparison Section */}
+          <div className="pt-6 border-t border-gray-100">
+            <div className="mb-4">
+              <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Costos de Distribuidores (Wholesalers)</h3>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Registra y compara cuánto te cobra cada distribuidor por este producto</p>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                <div className="sm:col-span-6">
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Distribuidor / Wholesaler</label>
+                  <select
+                    value={selectedVendorPriceId}
+                    onChange={e => setSelectedVendorPriceId(e.target.value)}
+                    className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold outline-none focus:border-blue-500"
+                  >
+                    <option value="">-- Selecciona Distribuidor --</option>
+                    {vendors.map((v: any) => (
+                      <option key={v.id} value={v.id}>{v.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="sm:col-span-4 relative">
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Costo ($)</label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={vendorPriceValue}
+                      onChange={e => setVendorPriceValue(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full p-2 pl-6 bg-white border border-gray-200 rounded-lg text-xs font-bold outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <button
+                    type="button"
+                    onClick={handleAddVendorPrice}
+                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-lg transition-all shadow-sm cursor-pointer"
+                  >
+                    Asignar
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* List of Wholesaler Prices with Comparison */}
+            <div className="space-y-2">
+              {(product.vendorPrices || []).map((vp) => {
+                const isCheapest = cheapestVendorPrice && cheapestVendorPrice.vendorId === vp.vendorId;
+                return (
+                  <div key={vp.vendorId} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl shadow-sm">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-slate-600 text-xs">
+                        {vp.vendorName.substring(0,2).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-gray-900 uppercase">{vp.vendorName}</p>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase">Último costo registrado: ${vp.costo.toFixed(2)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {isCheapest && (product.vendorPrices || []).length > 1 && (
+                        <span className="px-2 py-0.5 bg-green-50 border border-green-200 text-[9px] font-black text-green-600 rounded-full tracking-wider uppercase animate-pulse">
+                          ¡Más barato!
+                        </span>
+                      )}
+                      <span className="text-xs font-black text-slate-800">${vp.costo.toFixed(2)}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveVendorPrice(vp.vendorId)}
+                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {(product.vendorPrices || []).length === 0 && (
+                <div className="text-center py-4 border-2 border-dashed border-gray-100 rounded-xl bg-gray-50/50">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">No se han asignado distribuidores aún</p>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Modifiers Section */}
           {(!businessCategory || businessCategory.enabledFields.modifiers) && (
             <div className="pt-6 border-t border-gray-100">
@@ -1117,7 +1255,7 @@ const CreateProductModal = ({ onClose, onSave, categories, initialProduct, globa
 };
 
 const CreateCategoryModal = ({ onClose, onSave, availableTaxes, businessCategory }: any) => {
-  const [category, setCategory] = useState({ nombre: '', taxIds: [] as string[], quickAccess: false, moduleType: 'grocery' });
+  const [category, setCategory] = useState({ nombre: '', taxIds: [] as string[], quickAccess: false, moduleType: 'grocery', ebt: false });
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1169,7 +1307,7 @@ const CreateCategoryModal = ({ onClose, onSave, availableTaxes, businessCategory
                       onChange={() => toggleTax(tax.id)}
                       className="rounded text-blue-600 focus:ring-blue-500"
                     />
-                    <span className="text-sm font-medium text-gray-700">{tax.nombre} ({tax.porcentaje}%)</span>
+                    <span className="text-sm font-medium text-gray-700">{tax.nombre} ({tax.porcentaje !== undefined ? tax.porcentaje : (tax.tasa ?? 0)}%)</span>
                   </label>
                 ))}
               </div>
@@ -1190,6 +1328,20 @@ const CreateCategoryModal = ({ onClose, onSave, availableTaxes, businessCategory
             </button>
           </div>
 
+          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+            <div>
+              <p className="text-sm font-bold text-slate-800">EBT Eligible (SNAP)</p>
+              <p className="text-xs text-slate-500">Allow items from this category to be bought with EBT card</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCategory(prev => ({ ...prev, ebt: !prev.ebt }))}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${category.ebt ? 'bg-blue-500' : 'bg-slate-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${category.ebt ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
           <div className="flex justify-end gap-2 mt-6">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
             <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
@@ -1204,7 +1356,12 @@ const CreateTaxModal = ({ onClose, onSave }: any) => {
   const [tax, setTax] = useState({ nombre: '', tasa: 0 });
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ ...tax, id: `TAX-${Date.now()}` });
+    onSave({ 
+      id: `TAX-${Date.now()}`,
+      nombre: tax.nombre,
+      porcentaje: tax.tasa,
+      tasa: tax.tasa
+    });
   };
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1331,7 +1488,7 @@ const CreateSalesmanModal = ({ onClose, onSave }: any) => {
             <input required type="text" maxLength={4} placeholder="PIN (4 digits)" value={salesman.pin || ''} onChange={e => setSalesman({...salesman, pin: e.target.value.replace(/\D/g, '')})} className="w-full p-2 border rounded font-mono" />
           </div>
           <input type="email" placeholder="Email" value={salesman.email || ''} onChange={e => setSalesman({...salesman, email: e.target.value})} className="w-full p-2 border rounded" />
-          <input type="text" placeholder="Teléfono" value={salesman.telefono || ''} onChange={e => setSalesman({...salesman, telefono: e.target.value})} className="w-full p-2 border rounded" />
+          <input type="text" placeholder="Teléfono" value={salesman.telefono || ''} onChange={e => setSalesman({...salesman, telefono: formatPhoneNumber(e.target.value)})} className="w-full p-2 border rounded" />
           <input type="text" placeholder="Direccion" value={salesman.direccion || ''} onChange={e => setSalesman({...salesman, direccion: e.target.value})} className="w-full p-2 border rounded" />
           <div className="grid grid-cols-3 gap-4">
             <input type="text" placeholder="Ciudad" value={salesman.ciudad || ''} onChange={e => setSalesman({...salesman, ciudad: e.target.value})} className="w-full p-2 border rounded" />
@@ -1664,7 +1821,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleClientChange = (id: string, field: keyof Client, value: any) => {
-    const safeValue = value ?? '';
+    let safeValue = value ?? '';
+    if (field === 'telefono') {
+      safeValue = formatPhoneNumber(safeValue);
+    }
     setDoc(doc(db, 'clients', id), { [field]: safeValue }, { merge: true }).catch(error => {
       handleFirestoreError(error, OperationType.UPDATE, `clients/${id}`);
     });
@@ -1672,7 +1832,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleSalesmanChange = (id: string, field: keyof Salesman, value: any) => {
-    const safeValue = value ?? '';
+    let safeValue = value ?? '';
+    if (field === 'telefono') {
+      safeValue = formatPhoneNumber(safeValue);
+    }
     setDoc(doc(db, 'salesmen', id), { [field]: safeValue }, { merge: true }).catch(error => {
       handleFirestoreError(error, OperationType.UPDATE, `salesmen/${id}`);
     });
@@ -2083,7 +2246,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [storeSettings.businessCategory]);
 
   const handleVendorChange = (id: string, field: keyof Vendor, value: any) => {
-    const safeValue = value ?? '';
+    let safeValue = value ?? '';
+    if (field === 'telefono') {
+      safeValue = formatPhoneNumber(safeValue);
+    }
     setDoc(doc(db, 'vendors', id), { [field]: safeValue }, { merge: true }).catch(error => {
       handleFirestoreError(error, OperationType.UPDATE, `vendors/${id}`);
     });
@@ -2525,6 +2691,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           if (activeTab === 'Clients') {
             if (!mappedItem.nombre) mappedItem.nombre = 'Imported Client';
             if (!mappedItem.terminosCredito) mappedItem.terminosCredito = 'CASH/TODAY';
+            if (mappedItem.telefono) {
+              mappedItem.telefono = formatPhoneNumber(String(mappedItem.telefono));
+            }
             
             if (!mappedItem.id) {
               const existing = currentData.find(c => 
@@ -2539,6 +2708,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             if (!mappedItem.nombre) mappedItem.nombre = 'Imported';
             if (!mappedItem.apellido) mappedItem.apellido = 'Salesman';
             mappedItem.activo = mappedItem.activo === 'true' || mappedItem.activo === true || mappedItem.activo === undefined;
+            if (mappedItem.telefono) {
+              mappedItem.telefono = formatPhoneNumber(String(mappedItem.telefono));
+            }
             
             if (!mappedItem.id) {
               const existing = currentData.find(s => 
@@ -2546,6 +2718,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 (mappedItem.email && s.email === mappedItem.email)
               );
               if (existing) mappedItem.id = existing.id;
+            }
+          }
+
+          if (activeTab === 'Suppliers') {
+            if (mappedItem.telefono) {
+              mappedItem.telefono = formatPhoneNumber(String(mappedItem.telefono));
             }
           }
 
@@ -2673,7 +2851,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleStoreSettingsChange = (field: keyof StoreSettings, value: any) => {
-    const newSettings = { ...storeSettings, [field]: value };
+    let safeValue = value;
+    if (field === 'telefono') {
+      safeValue = formatPhoneNumber(safeValue);
+    }
+    const newSettings = { ...storeSettings, [field]: safeValue };
     setDoc(doc(db, 'settings', storeSettings.id), sanitizeForFirestore(newSettings), { merge: true }).catch(error => {
       handleFirestoreError(error, OperationType.UPDATE, `settings/${storeSettings.id}`);
     });
@@ -4267,7 +4449,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <>
             <ActionHeader title="Categories" onAdd={() => setIsCreatingCategory(true)} onClean={() => handleCleanAll('categories', setCategories, 'Categories')} />
             {renderTable(
-              ['ID', 'Nombre', 'Taxes', 'Fondo', 'Borde', 'Quick Access', ...(businessCategory?.id === 'combo' ? ['Module Type'] : [])],
+              ['ID', 'Nombre', 'Taxes', 'EBT SNAP', 'Fondo', 'Borde', 'Quick Access', ...(businessCategory?.id === 'combo' ? ['Module Type'] : [])],
               categories,
               (c: Category) => (
                 <>
@@ -4288,6 +4470,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div className="flex flex-wrap gap-1">
                       {taxes.map(tax => {
                         const isSelected = c.taxIds?.includes(tax.id);
+                        const rateVal = tax.porcentaje !== undefined ? tax.porcentaje : ((tax as any).tasa ?? 0);
                         return (
                           <button
                             key={tax.id}
@@ -4305,11 +4488,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               isSelected ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-500 border border-transparent hover:bg-gray-200'
                             }`}
                           >
-                            {tax.nombre}
+                            {tax.nombre} ({rateVal}%)
                           </button>
                         );
                       })}
                     </div>
+                  </td>
+                  <td className="px-6 py-3">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await setDoc(doc(db, 'categories', c.id), { ebt: !c.ebt }, { merge: true });
+                        } catch (error) {
+                          handleFirestoreError(error, OperationType.UPDATE, `categories/${c.id}`);
+                        }
+                      }}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${c.ebt ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}
+                      title="Permitir comprar productos de esta categoría con tarjeta EBT"
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${c.ebt ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
                   </td>
                   <td className="px-6 py-3">
                     <input 
@@ -5389,7 +5587,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <>
                     <td className="px-6 py-3 font-mono text-xs">{t.id}</td>
                     <td className="px-6 py-3 font-bold">{t.nombre}</td>
-                    <td className="px-6 py-3">{t.porcentaje}%</td>
+                    <td className="px-6 py-3">{t.porcentaje !== undefined ? t.porcentaje : ((t as any).tasa ?? 0)}%</td>
                     <td 
                       className="px-6 py-3 text-red-600 cursor-pointer hover:underline"
                       onClick={(e) => {
@@ -5995,6 +6193,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {isAddingProduct && (
         <CreateProductModal 
           categories={categories}
+          vendors={vendors}
           globalImages={globalImages}
           businessCategory={businessCategory}
           globalModifierGroups={globalModifierGroups}
@@ -6052,6 +6251,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <CreateProductModal 
           categories={categories}
           initialProduct={editingProduct}
+          vendors={vendors}
           globalImages={globalImages}
           businessCategory={businessCategory}
           globalModifierGroups={globalModifierGroups}
@@ -6092,7 +6292,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 storeId: storeSettings.id,
                 nombre: formData.get('nombre') as string,
                 contacto: formData.get('contacto') as string,
-                telefono: formData.get('telefono') as string,
+                telefono: formatPhoneNumber((formData.get('telefono') as string) || ''),
                 email: formData.get('email') as string,
                 direccion: formData.get('direccion') as string,
                 terminos: formData.get('terminos') as string,

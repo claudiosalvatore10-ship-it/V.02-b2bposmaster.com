@@ -55,6 +55,7 @@ interface PreviewProps {
     b5?: number;
     b1?: number;
   };
+  onBarcodeClick?: (invoiceId: string) => void;
 }
 
 export const KitchenTicketPreview: React.FC<{
@@ -146,7 +147,8 @@ export const TicketPreview: React.FC<PreviewProps> = ({
   paymentMethod,
   splits,
   invoiceId,
-  bills
+  bills,
+  onBarcodeClick
 }) => {
   const displayInvoiceId = Object.prototype.toString.call(invoiceId) === '[object String]' && String(invoiceId).length > 0
     ? String(invoiceId).toUpperCase() 
@@ -268,12 +270,12 @@ export const TicketPreview: React.FC<PreviewProps> = ({
         </div>
       )}
 
-      {paymentMethod === 'Split' && splits && splits.length > 0 && (
+      {splits && splits.length > 0 && (
         <div className="mt-2 pt-2 border-t border-gray-100 border-dashed space-y-1">
-          <p className="text-[9px] font-black uppercase text-gray-600 tracking-widest mb-1">Split Payment Breakdown</p>
+          <p className="text-[9px] font-black uppercase text-gray-600 tracking-widest mb-1">DETALLE DE PAGO / SPLIT</p>
           {splits.map((split, idx) => (
-            <div key={idx} className="flex justify-between text-[10px] font-bold text-gray-700 pb-0.5">
-              <span className="uppercase">{split.method}</span>
+            <div key={idx} className="flex justify-between text-[11px] font-bold text-gray-700 pb-0.5">
+              <span className="uppercase">{split.method === 'EBT' ? '🟢 EBT' : split.method === 'Cash' ? '💵 Cash' : split.method === 'Credit' ? '💳 Card' : split.method}</span>
               <span>${split.amount.toFixed(2)}</span>
             </div>
           ))}
@@ -301,8 +303,15 @@ export const TicketPreview: React.FC<PreviewProps> = ({
         )
       )}
 
-      <div className="mt-6 flex justify-center">
+      <div 
+        onClick={() => onBarcodeClick?.(displayInvoiceId)} 
+        className={`mt-6 flex flex-col items-center justify-center ${onBarcodeClick ? 'cursor-pointer hover:bg-slate-100 transition-all p-2 rounded-xl border border-dashed border-slate-300' : ''}`}
+        title={onBarcodeClick ? "Click para restaurar/escanear esta orden" : undefined}
+      >
         <Barcode value={displayInvoiceId.length > 20 ? displayInvoiceId.substring(0, 12) : displayInvoiceId} width={1.5} height={30} fontSize={10} margin={0} displayValue={false} />
+        {onBarcodeClick && (
+          <span className="text-[8px] text-blue-500 font-bold mt-1 uppercase tracking-tight">⚡ Click para Escanear</span>
+        )}
       </div>
       <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-widest text-center">{displayInvoiceId.length > 20 ? displayInvoiceId.substring(0, 12) : displayInvoiceId}</p>
     </div>
@@ -326,7 +335,8 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
   dueDate = new Date().toLocaleDateString(),
   splits,
   invoiceId,
-  bills
+  bills,
+  onBarcodeClick
 }) => {
   const displayInvoiceId = Object.prototype.toString.call(invoiceId) === '[object String]' && String(invoiceId).length > 0
     ? String(invoiceId).toUpperCase() 
@@ -359,8 +369,15 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
           <p className="text-gray-700">Date: <span className="font-black text-gray-900">{new Date().toLocaleDateString()}</span></p>
           <p className="text-gray-700">Status: <span className="font-black text-gray-900">{paymentMethod === 'Pending' ? 'Pending' : 'Pagado'}</span></p>
         </div>
-        <div className="mt-2 flex justify-end">
+        <div 
+          onClick={() => onBarcodeClick?.(displayInvoiceId)}
+          className={`mt-2 flex flex-col items-end justify-center ${onBarcodeClick ? 'cursor-pointer hover:bg-slate-50 transition-all p-2 rounded-xl border border-dashed border-slate-200' : ''}`}
+          title={onBarcodeClick ? "Click para restaurar/escanear esta orden" : undefined}
+        >
           <Barcode value={displayInvoiceId.length > 20 ? displayInvoiceId.substring(0, 12) : displayInvoiceId} width={1.5} height={30} fontSize={10} margin={0} displayValue={false} />
+          {onBarcodeClick && (
+            <span className="text-[8px] text-blue-500 font-bold mt-1 uppercase tracking-tight">⚡ Click para Escanear</span>
+          )}
         </div>
       </div>
     </div>
@@ -393,7 +410,6 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
     <table className="w-full mb-6 text-sm">
       <thead>
         <tr className="border-b-2 border-gray-200 text-left">
-          <th className="py-1.5 text-xs font-black text-gray-900 uppercase w-24">Barcode</th>
           <th className="py-1.5 text-xs font-black text-gray-900 uppercase">Item</th>
           <th className="py-1.5 text-xs font-black text-gray-900 uppercase text-center w-12">Qty</th>
           <th className="py-1.5 text-xs font-black text-gray-900 uppercase text-center w-20">Price</th>
@@ -409,20 +425,13 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
           const itemTotal = unitPrice * itemQuantity;
           return (
             <tr key={idx}>
-              <td className="py-2 pr-2 align-top">
-                {item.upc || item.sku ? (
-                  <div className="flex flex-col items-start gap-1">
-                    <Barcode value={item.upc || item.sku || ''} width={1} height={20} fontSize={8} margin={0} displayValue={false} />
-                    <span className="text-[9px] text-gray-500 font-bold leading-none uppercase">{item.upc || item.sku}</span>
-                  </div>
-                ) : (
-                  <span className="text-[10px] text-gray-400 font-bold">N/A</span>
-                )}
-              </td>
               <td className="py-2 align-top">
                 <p className="font-black text-gray-900 text-sm uppercase leading-tight">{item.nombre}</p>
+                {(item.upc || item.sku) && (
+                  <p className="text-[10px] text-gray-500 font-bold leading-tight mt-0.5">UPC/SKU: {item.upc || item.sku}</p>
+                )}
                 {item.serialNumber && (
-                  <p className="text-[10px] text-gray-600 font-bold leading-tight">S/N: {item.serialNumber}</p>
+                  <p className="text-[10px] text-gray-600 font-bold leading-tight mt-0.5">S/N: {item.serialNumber}</p>
                 )}
                 {item.promo && item.promo.type === 'combo' && item.promo.items && item.promo.items.map((promoItem, pIdx) => (
                   <p key={`p-${pIdx}`} className="text-[10px] text-gray-700 font-bold italic ml-2 leading-tight">
@@ -450,16 +459,18 @@ export const InvoicePreview: React.FC<PreviewProps> = ({
         <h3 className="text-xs font-black text-gray-900 uppercase">Payment Details</h3>
         <div className="space-y-1 text-xs font-bold text-gray-700 leading-tight">
           <p>Method: <span className="text-gray-900">{paymentMethod || 'Pending'}</span></p>
-          <p>Terms: <span className="text-gray-900">{creditTerm || 'CASH/TODAY'}</span></p>
+          {(storeSettings.businessCategory === 'wholesale' || !['grocery', 'restaurant', 'retail', 'combo'].includes(storeSettings.businessCategory || '')) && (
+            <p>Terms: <span className="text-gray-900">{creditTerm || 'CASH/TODAY'}</span></p>
+          )}
           {paymentMethod === 'Check' && (
             <p>Amount in Words: <span className="text-gray-900 italic">{numberToWords(totalCash)}</span></p>
           )}
-          {paymentMethod === 'Split' && splits && splits.length > 0 && (
+          {splits && splits.length > 0 && (
             <div className="mt-2 space-y-1 pt-2 border-t border-gray-100">
-              <p className="text-[10px] text-gray-500 uppercase">Breakdown:</p>
+              <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">DETALLE DE PAGO / SPLIT:</p>
               {splits.map((split, idx) => (
-                <div key={idx} className="flex justify-between text-gray-900">
-                  <span>{split.method}</span>
+                <div key={idx} className="flex justify-between text-gray-900 font-bold">
+                  <span>{split.method === 'EBT' ? '🟢 EBT' : split.method === 'Cash' ? '💵 Cash' : split.method === 'Credit' ? '💳 Card' : split.method}</span>
                   <span>${split.amount.toFixed(2)}</span>
                 </div>
               ))}

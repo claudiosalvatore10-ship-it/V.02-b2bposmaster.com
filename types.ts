@@ -140,6 +140,7 @@ export interface Product {
   modifierGroups?: ModifierGroup[];
   promo?: PromoConfig;
   moduleType?: 'grocery' | 'restaurant';
+  vendorPrices?: { vendorId: string; vendorName: string; costo: number; lastUpdated?: number }[];
 }
 
 export interface Client {
@@ -221,7 +222,7 @@ export interface Order {
   estado: 'Pendiente' | 'Pagado' | 'Enviado' | 'Cancelado';
   clienteId: string;
   vendedorId: string;
-  metodoPago: 'Cash' | 'Credit' | 'Check' | '';
+  metodoPago: 'Cash' | 'Credit' | 'Check' | 'EBT' | 'EBT + Cash' | 'EBT + Credit' | 'Split' | '';
   checkNumber?: string;
   montoLetras?: string;
   terminosCredito?: string;
@@ -289,7 +290,7 @@ export interface Inventory {
   total: number;
   estado: string;
   items?: any[];
-  metodoPago?: 'Cash' | 'Credit' | 'Check' | '';
+  metodoPago?: 'Cash' | 'Credit' | 'Check' | 'EBT' | 'EBT + Cash' | 'EBT + Credit' | 'Split' | '';
   terminosCredito?: string;
   amountTendered?: number;
   changeDue?: number;
@@ -314,6 +315,7 @@ export interface Category {
   borderColor?: string;
   quickAccess?: boolean;
   moduleType?: 'grocery' | 'restaurant';
+  ebt?: boolean;
 }
 
 export interface Tax {
@@ -333,3 +335,62 @@ export interface Device {
   modelo?: string;
   activo: boolean;
 }
+
+export interface MerchantRegistration {
+  id: string;
+  storeId?: string;
+  salesmanId: string;
+  salesmanName: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: number;
+  notes?: string;
+
+  // Owner's Information
+  ownerFirstName: string;
+  ownerLastName: string;
+  ownerDob: string;
+  ownerSsn: string;
+  ownerCountry: string;
+  ownerHomeAddress: string;
+  ownerApartment?: string;
+  ownerCity: string;
+  ownerState: string;
+  ownerZipCode: string;
+  ownerCellPhone: string;
+  ownerEmail: string;
+
+  // Business Information
+  busStoreNameDba: string;
+  busLegalName: string;
+  busLegalType: string;
+  busPhysicalAddress: string;
+  busCity: string;
+  busState: string;
+  busZipCode: string;
+  busPhone: string;
+  busLegalSameAsDbaAddress: boolean;
+  busTaxId: string;
+  busEstablishedDate: string;
+
+  // Bank Info
+  bankName: string;
+  bankAccountHolder: string;
+  bankRoutingNumber: string;
+  bankAccountNumber: string;
+  bankIndustryType: string;
+  bankProjectedMonthlyCreditCardCharges: string;
+  bankProjectedYearlyStoreSales: string;
+
+  // Document attachments (Base64 file value)
+  docDriversLicense?: string;
+  docDriversLicenseName?: string;
+  docBusinessLicense?: string;
+  docBusinessLicenseName?: string;
+  docVoidedCheck?: string;
+  docVoidedCheckName?: string;
+  docAdditional_1?: string;
+  docAdditional_1Name?: string;
+  docAdditional_2?: string;
+  docAdditional_2Name?: string;
+}
+

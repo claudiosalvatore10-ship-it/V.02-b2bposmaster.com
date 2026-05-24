@@ -201,6 +201,60 @@
         "direccion": { "type": "string" },
         "activo": { "type": "boolean" }
       }
+    },
+    "MerchantRegistration": {
+      "title": "MerchantRegistration",
+      "description": "Merchant credit card processing application details.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeId": { "type": "string" },
+        "salesmanId": { "type": "string" },
+        "salesmanName": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "notes": { "type": "string" },
+        "ownerFirstName": { "type": "string" },
+        "ownerLastName": { "type": "string" },
+        "ownerDob": { "type": "string" },
+        "ownerSsn": { "type": "string" },
+        "ownerCountry": { "type": "string" },
+        "ownerHomeAddress": { "type": "string" },
+        "ownerApartment": { "type": "string" },
+        "ownerCity": { "type": "string" },
+        "ownerState": { "type": "string" },
+        "ownerZipCode": { "type": "string" },
+        "ownerCellPhone": { "type": "string" },
+        "ownerEmail": { "type": "string" },
+        "busStoreNameDba": { "type": "string" },
+        "busLegalName": { "type": "string" },
+        "busLegalType": { "type": "string" },
+        "busPhysicalAddress": { "type": "string" },
+        "busCity": { "type": "string" },
+        "busState": { "type": "string" },
+        "busZipCode": { "type": "string" },
+        "busPhone": { "type": "string" },
+        "busLegalSameAsDbaAddress": { "type": "boolean" },
+        "busTaxId": { "type": "string" },
+        "busEstablishedDate": { "type": "string" },
+        "bankName": { "type": "string" },
+        "bankAccountHolder": { "type": "string" },
+        "bankRoutingNumber": { "type": "string" },
+        "bankAccountNumber": { "type": "string" },
+        "bankIndustryType": { "type": "string" },
+        "bankProjectedMonthlyCreditCardCharges": { "type": "string" },
+        "bankProjectedYearlyStoreSales": { "type": "string" },
+        "docDriversLicense": { "type": "string" },
+        "docDriversLicenseName": { "type": "string" },
+        "docBusinessLicense": { "type": "string" },
+        "docBusinessLicenseName": { "type": "string" },
+        "docVoidedCheck": { "type": "string" },
+        "docVoidedCheckName": { "type": "string" },
+        "docAdditional_1": { "type": "string" },
+        "docAdditional_1Name": { "type": "string" },
+        "docAdditional_2": { "type": "string" },
+        "docAdditional_2Name": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -251,6 +305,10 @@
     "/devices/{deviceId}": {
       "schema": { "$ref": "#/entities/Device" },
       "description": "Devices."
+    },
+    "/merchantRegistrations/{registrationId}": {
+      "schema": { "$ref": "#/entities/MerchantRegistration" },
+      "description": "Merchant credit card processing applications."
     }
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Printer, Calculator, DollarSign, CreditCard, FileText } from 'lucide-react';
+import { X, Printer, Calculator, DollarSign, CreditCard, FileText, Sparkles } from 'lucide-react';
 import { Order, StoreSettings } from '../types';
 
 interface ZReportModalProps {
@@ -34,17 +34,49 @@ export const ZReportModal: React.FC<ZReportModalProps> = ({ orders, storeSetting
     let cashSales = 0;
     let creditSales = 0;
     let checkSales = 0;
+    let ebtSales = 0;
     let otherSales = 0;
 
     todaysOrders.forEach((o) => {
       totalSales += o.total;
-      if (o.metodoPago === 'Cash') cashSales += o.total;
-      else if (o.metodoPago === 'Credit') creditSales += o.total;
-      else if (o.metodoPago === 'Check') checkSales += o.total;
-      else otherSales += o.total;
+      if (o.splits && o.splits.length > 0) {
+        o.splits.forEach(sp => {
+          if (sp.method === 'Cash') cashSales += sp.amount;
+          else if (sp.method === 'Credit') creditSales += sp.amount;
+          else if (sp.method === 'Check') checkSales += sp.amount;
+          else if (sp.method === 'EBT') ebtSales += sp.amount;
+          else otherSales += sp.amount;
+        });
+      } else {
+        if (o.metodoPago === 'Cash') cashSales += o.total;
+        else if (o.metodoPago === 'Credit') creditSales += o.total;
+        else if (o.metodoPago === 'Check') checkSales += o.total;
+        else if (o.metodoPago === 'EBT') ebtSales += o.total;
+        else if (o.metodoPago === 'EBT + Cash') {
+          // Fallback splits estimate
+          const estEbt = o.articulos?.reduce((sum, item) => {
+            if (item.categoria === 'Vegetables' || item.categoria === 'Fruit' || item.categoria === 'Beverages' || item.categoria === 'Dairy & Eggs') {
+              return sum + (item.precio * item.cantidad);
+            }
+            return sum;
+          }, 0) || 0;
+          ebtSales += estEbt;
+          cashSales += Math.max(0, o.total - estEbt);
+        } else if (o.metodoPago === 'EBT + Credit') {
+          const estEbt = o.articulos?.reduce((sum, item) => {
+            if (item.categoria === 'Vegetables' || item.categoria === 'Fruit' || item.categoria === 'Beverages' || item.categoria === 'Dairy & Eggs') {
+              return sum + (item.precio * item.cantidad);
+            }
+            return sum;
+          }, 0) || 0;
+          ebtSales += estEbt;
+          creditSales += Math.max(0, o.total - estEbt);
+        }
+        else otherSales += o.total;
+      }
     });
 
-    return { totalSales, cashSales, creditSales, checkSales, otherSales, orderCount: todaysOrders.length };
+    return { totalSales, cashSales, creditSales, checkSales, ebtSales, otherSales, orderCount: todaysOrders.length };
   }, [todaysOrders]);
 
   const calculatedCash = useMemo(() => {
@@ -132,6 +164,13 @@ export const ZReportModal: React.FC<ZReportModalProps> = ({ orders, storeSetting
                       <span className="font-bold">Check</span>
                     </div>
                     <span className="font-black text-amber-800">${stats.checkSales.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                    <div className="flex items-center gap-2 text-emerald-700">
+                      <Sparkles className="w-4 h-4 text-emerald-600" />
+                      <span className="font-bold">EBT SNAP</span>
+                    </div>
+                    <span className="font-black text-emerald-800">${stats.ebtSales.toFixed(2)}</span>
                   </div>
                   {stats.otherSales > 0 && (
                     <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-200">

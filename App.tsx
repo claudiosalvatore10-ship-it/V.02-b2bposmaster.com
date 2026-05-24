@@ -35,6 +35,7 @@ import { TicketPreview, InvoicePreview, KitchenTicketPreview } from './component
 import { CreditCard, DollarSign, Eye, EyeOff, Calculator } from 'lucide-react';
 import { ZReportModal } from './components/ZReportModal';
 import { EditCartItemModal } from './components/EditCartItemModal';
+import MerchantRegistrationForm from './components/MerchantRegistrationForm';
 
 const MainPOS: React.FC = () => {
   const { t } = useTranslation();
@@ -448,11 +449,12 @@ const MainPOS: React.FC = () => {
         ? category.taxIds.map(tid => taxes.find(t => t.id === tid)).filter(Boolean) as Tax[]
         : taxes;
       appliedTaxes.forEach(tax => {
-        const amount = itemTotal * ((tax.porcentaje || 0) / 100);
+        const rawRate = tax.porcentaje !== undefined ? tax.porcentaje : ((tax as any).tasa ?? 0);
+        const amount = itemTotal * (rawRate / 100);
         if (taxesAppliedMap.has(tax.id)) {
           taxesAppliedMap.get(tax.id)!.amount += amount;
         } else {
-          taxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: tax.porcentaje || 0 });
+          taxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: rawRate });
         }
       });
     });
@@ -545,16 +547,134 @@ const MainPOS: React.FC = () => {
   };
 
   const executePrint = (callback?: () => void) => {
-    try {
-      window.print();
-    } catch (e) {
-      console.error('Print failed:', e);
-    } finally {
-      if (callback) {
-        setTimeout(callback, 500);
+    setTimeout(() => {
+      try {
+        window.print();
+      } catch (e) {
+        console.error('Print failed:', e);
+      } finally {
+        if (callback) {
+          setTimeout(callback, 500);
+        }
+      }
+    }, 150);
+  };
+
+  const handleLoadOrderToCart = (invoiceId: string) => {
+    const formattedId = invoiceId.trim().toUpperCase();
+    const foundOrder = orders.find(o => 
+      o.id.toUpperCase() === formattedId || 
+      o.factura.toUpperCase() === formattedId ||
+      o.factura.toUpperCase().substring(0, 12) === formattedId ||
+      o.id.toUpperCase().substring(0, 12) === formattedId
+    );
+    if (foundOrder) {
+      if (isReceiveMode) {
+        setReceiveCart(foundOrder.articulos);
+      } else {
+        setCart(foundOrder.articulos);
+      }
+      const orderClient = clients.find(c => c.id === foundOrder.clienteId);
+      if (orderClient) {
+        setSelectedClient(orderClient);
+      }
+      toast.success(`Orden ${foundOrder.factura} cargada con éxito en el ticket.`);
+      setShowInvoice(false);
+      setSelectedOrder(null);
+      setSelectedInventoryRecord(null);
+      return true;
+    } else {
+      toast.error(`No se encontró la orden con el código: ${invoiceId}`);
+      return false;
+    }
+  };
+
+  const handleRefundAction = () => {
+    const activeCart = isReceiveMode ? receiveCart : cart;
+    const setActiveCart = isReceiveMode ? setReceiveCart : setCart;
+    
+    if (activeCart.length > 0) {
+      const hasPositiveItems = activeCart.some(item => item.cantidad > 0);
+      if (hasPositiveItems) {
+        setActiveCart(prev => prev.map(item => ({
+          ...item,
+          cantidad: item.cantidad > 0 ? -item.cantidad : item.cantidad
+        })));
+        toast.info('Los artículos del ticket han sido modificados a cantidades negativas para Devolución/Reembolso.');
+      } else {
+        toast.info('Los artículos actuales ya están marcados como Devolución.');
+      }
+    } else {
+      const invoiceId = prompt('Ingrese o Escanee el código de barra o el número de factura/ticket para procesar un reembolso (Refund):');
+      if (invoiceId) {
+        const formattedId = invoiceId.trim().toUpperCase();
+        const foundOrder = orders.find(o => 
+          o.id.toUpperCase() === formattedId || 
+          o.factura.toUpperCase() === formattedId ||
+          o.factura.toUpperCase().substring(0, 12) === formattedId ||
+          o.id.toUpperCase().substring(0, 12) === formattedId
+        );
+        if (foundOrder) {
+          const refundItems = foundOrder.articulos.map(item => ({
+            ...item,
+            cartId: `REF-${item.id}-${Date.now()}-${Math.random().toString().substring(2,6)}`,
+            cantidad: -Math.abs(item.cantidad)
+          }));
+          
+          setActiveCart(refundItems);
+          
+          const orderClient = clients.find(c => c.id === foundOrder.clienteId);
+          if (orderClient) {
+            setSelectedClient(orderClient);
+          }
+          toast.success(`Orden ${foundOrder.factura} cargada con éxito en el ticket como REEMBOLSO (con cantidades en negativo).`);
+        } else {
+          toast.error(`No se encontró ninguna orden con el código: ${invoiceId}`);
+        }
       }
     }
   };
+
+  useEffect(() => {
+    let buffer = '';
+    let lastKeyTime = Date.now();
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        if (e.key === 'Enter') {
+          const inputVal = (target as HTMLInputElement).value?.trim();
+          if (inputVal && (inputVal.startsWith('TKT-') || inputVal.startsWith('INV-') || orders.some(o => o.factura === inputVal))) {
+            const loaded = handleLoadOrderToCart(inputVal);
+            if (loaded) {
+              (target as HTMLInputElement).value = '';
+              e.preventDefault();
+            }
+          }
+        }
+        return;
+      }
+
+      const currentTime = Date.now();
+      if (currentTime - lastKeyTime > 150) {
+        buffer = ''; // Reset buffer if too slow (regular user typing)
+      }
+      lastKeyTime = currentTime;
+
+      if (e.key === 'Enter') {
+        if (buffer.length >= 4) {
+          handleLoadOrderToCart(buffer);
+          buffer = '';
+          e.preventDefault();
+        }
+      } else if (e.key.length === 1) {
+        buffer += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [orders, isReceiveMode, clients]);
 
   const handleCompleteOrder = async (orderData: Partial<Order>) => {
     if (storeSettings.trainingMode) {
@@ -1225,27 +1345,29 @@ const MainPOS: React.FC = () => {
       category.taxIds.forEach(taxId => {
         const tax = taxes.find(t => t.id === taxId);
         if (tax) {
-          const amount = itemTotal * ((tax.porcentaje || 0) / 100);
+          const rawRate = tax.porcentaje !== undefined ? tax.porcentaje : ((tax as any).tasa ?? 0);
+          const amount = itemTotal * (rawRate / 100);
           taxAmount += amount;
           
           if (taxesAppliedMap.has(tax.id)) {
             const existing = taxesAppliedMap.get(tax.id)!;
             existing.amount += amount;
           } else {
-            taxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: tax.porcentaje || 0 });
+            taxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: rawRate });
           }
         }
       });
     } else {
       taxes.forEach(tax => {
-        const amount = itemTotal * ((tax.porcentaje || 0) / 100);
+        const rawRate = tax.porcentaje !== undefined ? tax.porcentaje : ((tax as any).tasa ?? 0);
+        const amount = itemTotal * (rawRate / 100);
         taxAmount += amount;
         
         if (taxesAppliedMap.has(tax.id)) {
           const existing = taxesAppliedMap.get(tax.id)!;
           existing.amount += amount;
         } else {
-          taxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: tax.porcentaje || 0 });
+          taxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: rawRate });
         }
       });
     }
@@ -1547,6 +1669,13 @@ const MainPOS: React.FC = () => {
                   }
                 }}
                 onRemoveItem={handleRemoveItem}
+                onClearCart={() => {
+                  if (isReceiveMode) {
+                    setReceiveCart([]);
+                  } else {
+                    setCart([]);
+                  }
+                }}
                 onCheckout={(details) => {
                   if (isReceiveMode && details) {
                     if (receiveCart.length === 0) {
@@ -1556,9 +1685,9 @@ const MainPOS: React.FC = () => {
                     const newInventory: Inventory = {
                       id: `inv-${Date.now()}`,
                       storeId: userStoreId!,
-                      proveedor: details.vendorId,
+                      proveedor: details.vendorId || '',
                       fecha: Date.now(),
-                      factura: details.invoiceNumber,
+                      factura: details.invoiceNumber || '',
                       articulos: receiveCart.reduce((acc, i) => acc + i.cantidad, 0),
                       total: receiveCart.reduce((acc, i) => acc + (i.costo * i.cantidad), 0),
                       estado: 'received',
@@ -1576,6 +1705,11 @@ const MainPOS: React.FC = () => {
                     toast.success('Inventory received successfully');
                     setReceiveCart([]);
                   } else {
+                    if (details && details.paymentMethod) {
+                      setInitialPaymentMethod(details.paymentMethod);
+                    } else {
+                      setInitialPaymentMethod('');
+                    }
                     setShowInvoice(true);
                   }
                 }}
@@ -1584,6 +1718,7 @@ const MainPOS: React.FC = () => {
                 activeSalesman={activeSalesman}
                 isReceiveMode={isReceiveMode}
                 vendors={vendors}
+                onRefundClick={handleRefundAction}
               />
             ) : (
           <>
@@ -1868,6 +2003,7 @@ const MainPOS: React.FC = () => {
           onSelectClient={setSelectedClient}
           initialPaymentMethod={initialPaymentMethod}
           initialTipAmount={pendingTipAmount}
+          onBarcodeClick={handleLoadOrderToCart}
         />
       )}
 
@@ -1937,6 +2073,7 @@ const MainPOS: React.FC = () => {
             invoice={selectedInventoryRecord}
             onClose={() => setSelectedInventoryRecord(null)}
             storeSettings={storeSettings}
+            onBarcodeClick={handleLoadOrderToCart}
           />
         </div>
       )}
@@ -1948,6 +2085,7 @@ const MainPOS: React.FC = () => {
           salesman={salesmen.find(s => s.id === selectedOrder.vendedorId)}
           storeSettings={storeSettings}
           onClose={() => setSelectedOrder(null)}
+          onBarcodeClick={handleLoadOrderToCart}
         />
       )}
 
@@ -2020,13 +2158,14 @@ const MainPOS: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const [mode, setMode] = useState<'pos' | 'customer' | 'kiosk' | 'landing' | 'login'>(() => {
+  const [mode, setMode] = useState<'pos' | 'customer' | 'kiosk' | 'landing' | 'login' | 'onboarding'>(() => {
     const searchParams = new URLSearchParams(window.location.search);
     if (searchParams.get('mode') === 'login') return 'login';
     if (window.location.hash === '#customer') return 'customer';
     if (window.location.hash === '#kiosk') return 'kiosk';
     if (window.location.hash === '#pos') return 'pos';
     if (window.location.hash === '#login') return 'login';
+    if (window.location.hash === '#onboarding') return 'onboarding';
     return 'landing';
   });
 
@@ -2041,6 +2180,7 @@ const App: React.FC = () => {
       else if (window.location.hash === '#kiosk') setMode('kiosk');
       else if (window.location.hash === '#login') setMode('login');
       else if (window.location.hash === '#pos') setMode('pos');
+      else if (window.location.hash === '#onboarding') setMode('onboarding');
       else setMode('landing');
     };
     window.addEventListener('hashchange', handleNavigation);
@@ -2053,6 +2193,14 @@ const App: React.FC = () => {
 
   if (mode === 'customer') return <CustomerDisplay />;
   if (mode === 'kiosk') return <KioskView />;
+  if (mode === 'onboarding') {
+    return (
+      <>
+        <Toaster position="top-center" richColors />
+        <MerchantRegistrationForm onBackToLanding={() => { window.location.hash = ''; }} />
+      </>
+    );
+  }
   if (mode === 'landing') {
     const handleAutoRegister = async (formData?: any) => {
       try {

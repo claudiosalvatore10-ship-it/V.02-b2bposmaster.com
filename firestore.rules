@@ -101,8 +101,8 @@ service cloud.firestore {
     }
 
     match /salesmen/{salesmanId} {
-      allow get: if isValidId(salesmanId) && isStoreUser(existing().get('storeId', null));
-      allow list: if isStoreUser(resource.data.storeId);
+      // Allow read (get and list) publicly so the anonymous merchant onboarding form can query and verify salesmen codes or select them
+      allow get, list: if true;
       allow create: if isValidId(salesmanId) && isSignedIn();
       allow update: if isValidId(salesmanId) && isAdmin() && isStoreUser(existing().get('storeId', null));
       allow delete: if isValidId(salesmanId) && isAdmin() && isStoreUser(existing().get('storeId', null));
@@ -181,6 +181,12 @@ service cloud.firestore {
     match /demoRequests/{requestId} {
       allow create: if true; // anyone can create a demo request
       allow read, update, delete: if isSuperAdmin();
+    }
+
+    match /merchantRegistrations/{registrationId} {
+      allow create: if isValidId(registrationId);
+      allow read, update: if isValidId(registrationId) && (isSuperAdmin() || (isSignedIn() && hasUserDoc()));
+      allow delete: if isValidId(registrationId) && isSuperAdmin();
     }
   }
 }

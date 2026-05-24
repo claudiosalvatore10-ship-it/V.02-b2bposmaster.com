@@ -114,28 +114,30 @@ export const FloatingOrderSummary: React.FC<FloatingOrderSummaryProps> = ({
       category.taxIds.forEach(taxId => {
         const tax = taxes.find(t => t.id === taxId);
         if (tax) {
-          const amount = itemTotal * ((tax.porcentaje || 0) / 100);
+          const rawRate = tax.porcentaje !== undefined ? tax.porcentaje : ((tax as any).tasa ?? 0);
+          const amount = itemTotal * (rawRate / 100);
           taxAmount += amount;
           
           if (taxesAppliedMap.has(tax.id)) {
             const existing = taxesAppliedMap.get(tax.id)!;
             existing.amount += amount;
           } else {
-            taxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: tax.porcentaje || 0 });
+            taxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: rawRate });
           }
         }
       });
     } else {
       // Fallback to global taxes if no category taxes are defined
       taxes.forEach(tax => {
-        const amount = itemTotal * ((tax.porcentaje || 0) / 100);
+        const rawRate = tax.porcentaje !== undefined ? tax.porcentaje : ((tax as any).tasa ?? 0);
+        const amount = itemTotal * (rawRate / 100);
         taxAmount += amount;
         
         if (taxesAppliedMap.has(tax.id)) {
           const existing = taxesAppliedMap.get(tax.id)!;
           existing.amount += amount;
         } else {
-          taxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: tax.porcentaje || 0 });
+          taxesAppliedMap.set(tax.id, { name: tax.nombre, amount, rate: rawRate });
         }
       });
     }

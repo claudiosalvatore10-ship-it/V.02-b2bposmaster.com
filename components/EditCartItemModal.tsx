@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { CartItem, Category } from '../types';
-import { X, DollarSign, Hash } from 'lucide-react';
+import { X, DollarSign, Hash, Trash2 } from 'lucide-react';
 
 interface EditCartItemModalProps {
   item: CartItem;
   categories: Category[];
   onClose: () => void;
   onSave: (updatedItem: CartItem) => void;
+  onDelete?: (cartId: string) => void;
 }
 
-export const EditCartItemModal: React.FC<EditCartItemModalProps> = ({ item, categories, onClose, onSave }) => {
+export const EditCartItemModal: React.FC<EditCartItemModalProps> = ({ item, categories, onClose, onSave, onDelete }) => {
   const [nombre, setNombre] = useState(item.nombre);
   const [categoria, setCategoria] = useState(item.categoria || '');
   const [precio, setPrecio] = useState(item.precio.toString());
@@ -166,13 +167,27 @@ export const EditCartItemModal: React.FC<EditCartItemModalProps> = ({ item, cate
 
         </div>
 
-        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-           <button onClick={onClose} className="px-5 py-2.5 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-200 transition-colors">
-             Cancel
-           </button>
-           <button onClick={handleSave} className="px-5 py-2.5 rounded-xl font-bold text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30">
-             Save Changes
-           </button>
+        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center gap-3">
+           {onDelete ? (
+             <button
+               onClick={() => {
+                 onDelete(item.cartId);
+                 onClose();
+               }}
+               type="button"
+               className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold text-sm transition-colors flex items-center gap-1.5"
+             >
+               <Trash2 className="w-4 h-4" /> Delete Item
+             </button>
+           ) : <div />}
+           <div className="flex gap-3">
+              <button onClick={onClose} className="px-5 py-2.5 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-200 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleSave} className="px-5 py-2.5 rounded-xl font-bold text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30">
+                Save Changes
+              </button>
+           </div>
         </div>
       </div>
     </div>
