@@ -68,6 +68,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
     contactFormSubtitle: 'Contacta a ventas para diseñar un entorno alineado a tu infraestructura comercial.',
     heroMode: 'single' as 'single' | 'carousel' | 'video',
     heroCarouselImages: [] as string[],
+    heroActiveCarouselImages: [] as string[],
     heroVideoUrl: ''
   });
 
@@ -82,6 +83,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
           contactItems: data.contactItems || prev.contactItems,
           heroMode: data.heroMode || 'single',
           heroCarouselImages: data.heroCarouselImages || [],
+          heroActiveCarouselImages: data.heroActiveCarouselImages || data.heroCarouselImages || [],
           heroVideoUrl: data.heroVideoUrl || ''
         }));
       }
@@ -92,14 +94,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
   // Autoplay intervals for screenshots carousel
   useEffect(() => {
     if (landingConfig.heroMode !== 'carousel') return;
-    const slides = landingConfig.heroCarouselImages || [];
+    const slides = landingConfig.heroActiveCarouselImages.length > 0
+      ? landingConfig.heroActiveCarouselImages
+      : landingConfig.heroCarouselImages;
     if (slides.length <= 1) return;
 
     const interval = setInterval(() => {
       setCurrentSlide(prev => (prev + 1) % slides.length);
     }, 4500);
     return () => clearInterval(interval);
-  }, [landingConfig.heroMode, landingConfig.heroCarouselImages]);
+  }, [landingConfig.heroMode, landingConfig.heroCarouselImages, landingConfig.heroActiveCarouselImages]);
 
   const toggleNecesidad = (req: string) => {
     setNecesidades(prev => prev.includes(req) ? prev.filter(r => r !== req) : [...prev, req]);
@@ -204,54 +208,64 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
             {/* 2. PHOTO CAROUSEL MODE */}
             {landingConfig.heroMode === 'carousel' && (
               <div className="relative rounded-[2rem] shadow-2xl border-4 border-white overflow-hidden bg-slate-100 max-h-[480px] aspect-[4/3] flex items-center justify-center group transition duration-500">
-                {landingConfig.heroCarouselImages && landingConfig.heroCarouselImages.length > 0 ? (
-                  <>
-                    <img 
-                      key={currentSlide}
-                      src={landingConfig.heroCarouselImages[currentSlide]} 
-                      alt={`Visualización POS ${currentSlide + 1}`} 
-                      className="w-full h-full object-cover transition-all duration-700" 
-                      referrerPolicy="no-referrer" 
-                    />
-                    
-                    {/* Navigation controllers */}
-                    {landingConfig.heroCarouselImages.length > 1 && (
-                      <>
-                        <button 
-                          type="button"
-                          onClick={() => setCurrentSlide(prev => (prev - 1 + landingConfig.heroCarouselImages.length) % landingConfig.heroCarouselImages.length)}
-                          className="absolute left-4 w-9 h-9 bg-white/95 hover:bg-white text-slate-800 rounded-full flex items-center justify-center shadow-lg transition opacity-0 group-hover:opacity-100 cursor-pointer"
-                        >
-                          <ChevronLeft className="w-5 h-5 font-bold" />
-                        </button>
-                        <button 
-                          type="button"
-                          onClick={() => setCurrentSlide(prev => (prev + 1) % landingConfig.heroCarouselImages.length)}
-                          className="absolute right-4 w-9 h-9 bg-white/95 hover:bg-white text-slate-800 rounded-full flex items-center justify-center shadow-lg transition opacity-0 group-hover:opacity-100 cursor-pointer"
-                        >
-                          <ChevronRight className="w-5 h-5 font-bold" />
-                        </button>
+                {(() => {
+                  const activeSlides = landingConfig.heroActiveCarouselImages && landingConfig.heroActiveCarouselImages.length > 0
+                    ? landingConfig.heroActiveCarouselImages
+                    : landingConfig.heroCarouselImages || [];
 
-                        {/* Pagination indicators */}
-                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 bg-black/35 backdrop-blur-xs p-1.5 rounded-full z-10 transition">
-                          {landingConfig.heroCarouselImages.map((_, i) => (
-                            <button
-                              key={i}
+                  if (activeSlides.length > 0) {
+                    const slideIndex = currentSlide >= activeSlides.length ? 0 : currentSlide;
+                    return (
+                      <>
+                        <img 
+                          key={slideIndex}
+                          src={activeSlides[slideIndex]} 
+                          alt={`Visualización POS ${slideIndex + 1}`} 
+                          className="w-full h-full object-cover transition-all duration-700" 
+                          referrerPolicy="no-referrer" 
+                        />
+                        
+                        {/* Navigation controllers */}
+                        {activeSlides.length > 1 && (
+                          <>
+                            <button 
                               type="button"
-                              onClick={() => setCurrentSlide(i)}
-                              className={`w-1.5 h-1.5 rounded-full transition-all ${currentSlide === i ? 'bg-white w-3' : 'bg-white/50 hover:bg-white/85'}`}
-                            />
-                          ))}
-                        </div>
+                              onClick={() => setCurrentSlide(prev => (prev - 1 + activeSlides.length) % activeSlides.length)}
+                              className="absolute left-4 w-9 h-9 bg-white/95 hover:bg-white text-slate-800 rounded-full flex items-center justify-center shadow-lg transition opacity-0 group-hover:opacity-100 cursor-pointer"
+                            >
+                              <ChevronLeft className="w-5 h-5 font-bold" />
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => setCurrentSlide(prev => (prev + 1) % activeSlides.length)}
+                              className="absolute right-4 w-9 h-9 bg-white/95 hover:bg-white text-slate-800 rounded-full flex items-center justify-center shadow-lg transition opacity-0 group-hover:opacity-100 cursor-pointer"
+                            >
+                              <ChevronRight className="w-5 h-5 font-bold" />
+                            </button>
+
+                            {/* Pagination indicators */}
+                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 bg-black/35 backdrop-blur-xs p-1.5 rounded-full z-10 transition">
+                              {activeSlides.map((_, i) => (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={() => setCurrentSlide(i)}
+                                  className={`w-1.5 h-1.5 rounded-full transition-all ${slideIndex === i ? 'bg-white w-3' : 'bg-white/50 hover:bg-white/85'}`}
+                                />
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </>
-                    )}
-                  </>
-                ) : (
-                  <div className="p-8 text-center text-slate-400">
-                    <Monitor className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs font-bold">No hay slides en tu carrusel todavía</p>
-                  </div>
-                )}
+                    );
+                  }
+                  return (
+                    <div className="p-8 text-center text-slate-400">
+                      <Monitor className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                      <p className="text-xs font-bold">No hay slides en tu carrusel todavía o todas están ocultas</p>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

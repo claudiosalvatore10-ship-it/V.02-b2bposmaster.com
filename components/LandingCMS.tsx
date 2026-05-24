@@ -45,6 +45,7 @@ interface LandingPageData {
   // New features for screenshots carousel & demo video
   heroMode?: 'single' | 'carousel' | 'video';
   heroCarouselImages?: string[];
+  heroActiveCarouselImages?: string[];
   heroVideoUrl?: string;
 }
 
@@ -76,6 +77,11 @@ const DEFAULT_LANDING_DATA: LandingPageData = {
     'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=1000',
     'https://images.unsplash.com/photo-1556742044-3c52d6e88c62?auto=format&fit=crop&q=80&w=1000'
   ],
+  heroActiveCarouselImages: [
+    'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&q=80&w=1000',
+    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=1000',
+    'https://images.unsplash.com/photo-1556742044-3c52d6e88c62?auto=format&fit=crop&q=80&w=1000'
+  ],
   heroVideoUrl: 'https://player.vimeo.com/external/371433846.sd.mp4?s=236da2f3c054273b1e2ca49622c349887756f7ef&profile_id=165&oauth2_token_id=57447761'
 };
 
@@ -85,6 +91,19 @@ export const LandingCMS: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<LandingPageData>(DEFAULT_LANDING_DATA);
   const [dragActive, setDragActive] = useState(false);
+  const [currentPreviewSlide, setCurrentPreviewSlide] = useState(0);
+
+  // Auto-slide carousel in CMS preview
+  useEffect(() => {
+    if (config.heroMode !== 'carousel') return;
+    const slides = config.heroActiveCarouselImages || config.heroCarouselImages || [];
+    if (slides.length <= 1) return;
+
+    const interval = setInterval(() => {
+      setCurrentPreviewSlide(prev => (prev + 1) % slides.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [config.heroMode, config.heroCarouselImages, config.heroActiveCarouselImages]);
 
   const processCarouselFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -115,9 +134,11 @@ export const LandingCMS: React.FC = () => {
           const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
           setConfig(prev => {
             const currentImgs = prev.heroCarouselImages || [];
+            const currentActive = prev.heroActiveCarouselImages || prev.heroCarouselImages || [];
             return {
               ...prev,
-              heroCarouselImages: [...currentImgs, dataUrl]
+              heroCarouselImages: [...currentImgs, dataUrl],
+              heroActiveCarouselImages: [...currentActive, dataUrl]
             };
           });
           toast.success('¡Foto de carrusel procesada y agregada con éxito!');
@@ -242,6 +263,7 @@ export const LandingCMS: React.FC = () => {
           contactFormSubtitle: data.contactFormSubtitle || DEFAULT_LANDING_DATA.contactFormSubtitle,
           heroMode: data.heroMode || DEFAULT_LANDING_DATA.heroMode,
           heroCarouselImages: data.heroCarouselImages || DEFAULT_LANDING_DATA.heroCarouselImages,
+          heroActiveCarouselImages: data.heroActiveCarouselImages || data.heroCarouselImages || DEFAULT_LANDING_DATA.heroActiveCarouselImages,
           heroVideoUrl: data.heroVideoUrl || DEFAULT_LANDING_DATA.heroVideoUrl
         });
       }
@@ -287,6 +309,19 @@ export const LandingCMS: React.FC = () => {
     const updatedItems = [...config.contactItems];
     updatedItems[index] = value;
     setConfig({ ...config, contactItems: updatedItems });
+  };
+
+  const toggleActiveImage = (url: string) => {
+    const currentActive = config.heroActiveCarouselImages || config.heroCarouselImages || [];
+    let nextActive;
+    if (currentActive.includes(url)) {
+      nextActive = currentActive.filter(u => u !== url);
+      toast.info('Se ocultó esta foto; no se mostrará en el carrusel de la web.');
+    } else {
+      nextActive = [...currentActive, url];
+      toast.success('Se activó esta foto; se mostrará en el carrusel de la web.');
+    }
+    setConfig({ ...config, heroActiveCarouselImages: nextActive });
   };
 
   if (loading) {
@@ -576,6 +611,31 @@ export const LandingCMS: React.FC = () => {
                       </label>
                     </div>
 
+                    {/* Tip for select exactly 3 items and clear-all button */}
+                    <div className="bg-blue-50/70 border border-blue-100 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left">
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-blue-800">💡 Tip de Selección de Fotos</p>
+                        <p className="text-[11px] text-blue-650 leading-relaxed font-medium">
+                          Para dejar exactamente <strong>3 fotos</strong>: usa la papelera roja <span className="text-red-500">🗑️</span> a la derecha de las imágenes que quieras quitar del carrusel. Usa las flechas <span className="text-slate-600">⬆️ ⬇️</span> para definir el orden.
+                        </p>
+                      </div>
+                      
+                      {config.heroCarouselImages && config.heroCarouselImages.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm('¿Estás seguro que deseas limpiar todas las imágenes del carrusel para empezar de nuevo?')) {
+                              setConfig({ ...config, heroCarouselImages: [], heroActiveCarouselImages: [] });
+                              toast.success('Galería del carrusel limpiada');
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-red-50 border border-red-200 hover:bg-red-100 text-red-650 rounded-xl text-[10px] font-extrabold transition self-start sm:self-center"
+                        >
+                          Limpiar todo el carrusel
+                        </button>
+                      )}
+                    </div>
+
                     {/* URL Input to add image */}
                     <div className="flex gap-2">
                       <input 
@@ -591,9 +651,14 @@ export const LandingCMS: React.FC = () => {
                           if (input && input.value.trim()) {
                             const val = input.value.trim();
                             const current = config.heroCarouselImages || [];
-                            setConfig({ ...config, heroCarouselImages: [...current, val] });
+                            const currentActive = config.heroActiveCarouselImages || config.heroCarouselImages || [];
+                            setConfig({ 
+                              ...config, 
+                              heroCarouselImages: [...current, val],
+                              heroActiveCarouselImages: [...currentActive, val]
+                            });
                             input.value = '';
-                            toast.success('¡Foto web añadida al carrusel!');
+                            toast.success('¡Foto web añadida y activada!');
                           } else {
                             toast.error('Ingresa una dirección URL válida');
                           }
@@ -605,72 +670,117 @@ export const LandingCMS: React.FC = () => {
                     </div>
 
                     {/* Image items manager */}
-                    <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                    <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
                       {(!config.heroCarouselImages || config.heroCarouselImages.length === 0) ? (
                         <div className="text-center py-8 bg-gray-50/50 rounded-2xl border border-gray-100 text-gray-400 text-xs font-medium">
                           No tienes fotos en el carrusel de capturas todavía. ¡Sube tu primera screenshot!
                         </div>
                       ) : (
-                        config.heroCarouselImages.map((img, index) => (
-                          <div key={index} className="flex items-center justify-between p-3 bg-white rounded-2xl border border-gray-150 shadow-sm gap-4 hover:border-gray-300 transition">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <span className="text-[10px] font-black font-mono text-gray-400 bg-gray-100 rounded-md w-6 h-6 flex items-center justify-center flex-shrink-0">
-                                {index + 1}
-                              </span>
-                              <div className="w-16 h-10 rounded-lg overflow-hidden border border-gray-100 bg-slate-50 flex-shrink-0 relative">
-                                <img src={img} alt={`Slide ${index}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        config.heroCarouselImages.map((img, index) => {
+                          const isActive = (config.heroActiveCarouselImages || config.heroCarouselImages || []).includes(img);
+                          return (
+                            <div key={index} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white rounded-2xl border border-gray-150 shadow-sm gap-3 hover:border-gray-300 transition">
+                              <div 
+                                onClick={() => {
+                                  setCurrentPreviewSlide(index);
+                                }}
+                                className={`flex items-center gap-3 min-w-0 flex-1 cursor-pointer p-1 rounded-xl transition-all duration-200 ${currentPreviewSlide === index ? 'bg-blue-50/75 border border-blue-100 shadow-xs ring-1 ring-blue-50' : 'hover:bg-slate-50 border border-transparent'}`}
+                                title="Haz clic para previsualizar esta foto en el móvil de la derecha"
+                              >
+                                <span className="text-[10px] font-black font-mono text-gray-400 bg-gray-100 rounded-md w-6 h-6 flex items-center justify-center flex-shrink-0">
+                                  {index + 1}
+                                </span>
+                                <div className="w-16 h-10 rounded-lg overflow-hidden border border-gray-100 bg-slate-50 flex-shrink-0 relative">
+                                  <img src={img} alt={`Slide ${index}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] font-bold text-gray-650 truncate max-w-[180px] md:max-w-[280px]">
+                                    {img.startsWith('data:') ? 'Imagen Local de mi Equipo (Optimizado)' : img}
+                                  </p>
+                                  <p className="text-[9px] text-gray-400">
+                                    Haz clic para previsualizar
+                                  </p>
+                                </div>
                               </div>
-                              <span className="text-[10px] font-medium text-gray-400 truncate max-w-[180px] md:max-w-[280px]">
-                                {img.startsWith('data:') ? 'Imagen Local de mi Equipo (Optimizado)' : img}
-                              </span>
+                              
+                              <div className="flex items-center justify-between sm:justify-end gap-2 flex-shrink-0">
+                                {/* Toggle visibility button */}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleActiveImage(img)}
+                                  className={`px-2 py-1 text-[9px] font-extrabold rounded-lg border transition-all flex items-center gap-1 cursor-pointer ${
+                                    isActive 
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 shadow-xs' 
+                                      : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                                  }`}
+                                  title={isActive ? "Hacer invisible en el carrusel de la landing page" : "Hacer visible en el carrusel de la landing page"}
+                                >
+                                  {isActive ? (
+                                    <>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                      Mostrar en Web
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                      Oculto (Banco de fotos)
+                                    </>
+                                  )}
+                                </button>
+
+                                <div className="flex items-center gap-1">
+                                  <button 
+                                    type="button"
+                                    disabled={index === 0}
+                                    onClick={() => {
+                                      const list = [...(config.heroCarouselImages || [])];
+                                      const temp = list[index];
+                                      list[index] = list[index - 1];
+                                      list[index - 1] = temp;
+                                      setConfig({ ...config, heroCarouselImages: list });
+                                    }}
+                                    className="p-1 px-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 text-gray-500 disabled:opacity-30 transition"
+                                    title="Subir orden"
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    disabled={index === config.heroCarouselImages.length - 1}
+                                    onClick={() => {
+                                      const list = [...(config.heroCarouselImages || [])];
+                                      const temp = list[index];
+                                      list[index] = list[index + 1];
+                                      list[index + 1] = temp;
+                                      setConfig({ ...config, heroCarouselImages: list });
+                                    }}
+                                    className="p-1 px-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 text-gray-500 disabled:opacity-30 transition"
+                                    title="Bajar orden"
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const list = (config.heroCarouselImages || []).filter((_, i) => i !== index);
+                                      const updatedActive = (config.heroActiveCarouselImages || []).filter(u => u !== img);
+                                      setConfig({ 
+                                        ...config, 
+                                        heroCarouselImages: list,
+                                        heroActiveCarouselImages: updatedActive
+                                      });
+                                      toast.info('Foto eliminada del carrusel');
+                                    }}
+                                    className="p-1 px-1.5 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 text-red-600 transition"
+                                    title="Eliminar de la galería"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                            
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <button 
-                                type="button"
-                                disabled={index === 0}
-                                onClick={() => {
-                                  const list = [...(config.heroCarouselImages || [])];
-                                  const temp = list[index];
-                                  list[index] = list[index - 1];
-                                  list[index - 1] = temp;
-                                  setConfig({ ...config, heroCarouselImages: list });
-                                }}
-                                className="p-1 px-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 text-gray-500 disabled:opacity-30 transition"
-                                title="Subir orden"
-                              >
-                                <ArrowUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button 
-                                type="button"
-                                disabled={index === config.heroCarouselImages.length - 1}
-                                onClick={() => {
-                                  const list = [...(config.heroCarouselImages || [])];
-                                  const temp = list[index];
-                                  list[index] = list[index + 1];
-                                  list[index + 1] = temp;
-                                  setConfig({ ...config, heroCarouselImages: list });
-                                }}
-                                className="p-1 px-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 text-gray-500 disabled:opacity-30 transition"
-                                title="Bajar orden"
-                              >
-                                <ArrowDown className="w-3.5 h-3.5" />
-                              </button>
-                              <button 
-                                type="button"
-                                onClick={() => {
-                                  const list = (config.heroCarouselImages || []).filter((_, i) => i !== index);
-                                  setConfig({ ...config, heroCarouselImages: list });
-                                  toast.info('Foto eliminada del carrusel');
-                                }}
-                                className="p-1 px-1.5 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 text-red-600 transition"
-                                title="Eliminar de la galería"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -985,14 +1095,82 @@ export const LandingCMS: React.FC = () => {
               </div>
             </div>
 
-            {/* Simulated Desktop App Screenshot */}
+            {/* Simulated Desktop App Display (Single, Carousel or Video) */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-1 overflow-hidden relative shadow-inner">
               <div className="flex items-center gap-1.5 px-1 py-1 bg-slate-950 rounded-t-lg opacity-40">
                 <span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
                 <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></span>
                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
               </div>
-              <img src={config.heroImage} alt="Preview" className="h-32 w-full object-cover rounded-b-lg object-top" referrerPolicy="no-referrer" />
+              
+              {/* 1. SINGLE IMAGE MODE */}
+              {(!config.heroMode || config.heroMode === 'single') && (
+                <img 
+                  src={config.heroImage} 
+                  alt="Preview" 
+                  className="h-32 w-full object-cover rounded-b-lg object-top" 
+                  referrerPolicy="no-referrer" 
+                />
+              )}
+
+              {/* 2. PHOTO CAROUSEL MODE */}
+              {config.heroMode === 'carousel' && (
+                <div className="relative h-32 w-full rounded-b-lg bg-slate-900 overflow-hidden flex items-center justify-center">
+                  {(() => {
+                    const activeSlides = config.heroActiveCarouselImages || config.heroCarouselImages || [];
+                    if (activeSlides.length > 0) {
+                      const slideIndex = currentPreviewSlide >= activeSlides.length ? 0 : currentPreviewSlide;
+                      return (
+                        <>
+                          <img 
+                            key={slideIndex}
+                            src={activeSlides[slideIndex]} 
+                            alt="Preview Slide" 
+                            className="w-full h-full object-cover rounded-b-lg" 
+                            referrerPolicy="no-referrer" 
+                          />
+                          
+                          {/* Optional little dot indicators */}
+                          <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex gap-1 bg-black/40 p-1 rounded-full z-10">
+                            {activeSlides.map((_, i) => (
+                              <div
+                                key={i}
+                                className={`w-1 h-1 rounded-full transition-all ${slideIndex === i ? 'bg-white w-2' : 'bg-white/40'}`}
+                              />
+                            ))}
+                          </div>
+                        </>
+                      );
+                    }
+                    return (
+                      <div className="p-2 text-center text-slate-500 text-[10px]">
+                        No hay fotos activas en tu carrusel todavía
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* 3. DEMO MP4 VIDEO MODE */}
+              {config.heroMode === 'video' && (
+                <div className="h-32 w-full rounded-b-lg bg-black flex items-center justify-center relative overflow-hidden">
+                  {config.heroVideoUrl ? (
+                    <video 
+                      key={config.heroVideoUrl}
+                      src={config.heroVideoUrl} 
+                      autoPlay 
+                      loop 
+                      muted 
+                      playsInline 
+                      className="w-full h-full object-cover rounded-b-lg" 
+                    />
+                  ) : (
+                    <div className="p-2 text-center text-slate-500 text-[10px]">
+                      Cargando demo de video...
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Features Preview Single Box */}
