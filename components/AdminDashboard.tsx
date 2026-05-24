@@ -17,6 +17,7 @@ import Papa from 'papaparse';
 import { read, utils, writeFile } from 'xlsx';
 import { QuantityControl } from './QuantityControl';
 import { formatPhoneNumber } from '../utils';
+import { LabelPrinter } from './LabelPrinter';
 
 interface AdminDashboardProps {
   onBack: () => void;
@@ -46,7 +47,7 @@ interface AdminDashboardProps {
   onBackToSuperAdmin?: () => void;
 }
 
-type Tab = 'Dashboard' | 'POS / Sales' | 'Products' | 'Clients' | 'Salesmen' | 'Categories' | 'Settings' | 'Orders' | 'Inventory' | 'Suppliers' | 'Purchase Orders' | 'Reports' | 'Devices' | 'Modifiers Library';
+type Tab = 'Dashboard' | 'POS / Sales' | 'Products' | 'Clients' | 'Salesmen' | 'Categories' | 'Settings' | 'Orders' | 'Inventory' | 'Suppliers' | 'Purchase Orders' | 'Reports' | 'Devices' | 'Modifiers Library' | 'Label Printer';
 
 const EditableCell = ({ value, onChange, type = "text", className = "", step }: any) => {
   const [localValue, setLocalValue] = React.useState(() => {
@@ -1582,6 +1583,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isAddingPromo, setIsAddingPromo] = useState(false);
   const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [productCategoryFilter, setProductCategoryFilter] = useState('');
   const [productAdminComboView, setProductAdminComboView] = useState<'grocery' | 'restaurant'>('grocery');
   const [clientSearchQuery, setClientSearchQuery] = useState('');
   const [salesmanSearchQuery, setSalesmanSearchQuery] = useState('');
@@ -1697,6 +1699,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     { id: 'Categories', icon: Tags },
     { id: 'Reports', icon: TrendingUp },
     { id: 'Devices', icon: PrinterIcon },
+    { id: 'Label Printer', icon: PrinterIcon, label: 'Label Printer' },
     { id: 'Settings', icon: Settings },
   ];
 
@@ -1981,6 +1984,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           showToast('Vendor deleted successfully', 'success');
         } catch (error) {
           handleFirestoreError(error, OperationType.DELETE, `vendors/${id}`);
+          setConfirmation({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+        }
+      }
+    });
+  };
+
+  const handleDeleteCategory = (id: string) => {
+    setConfirmation({
+      isOpen: true,
+      title: 'Delete Category',
+      message: 'Are you sure you want to delete this category? This action cannot be undone.',
+      confirmText: 'Yes, Delete',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'categories', id));
+          setCategories(categories.filter((c: any) => c.id !== id));
+          setConfirmation({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+          showToast('Category deleted successfully', 'success');
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, `categories/${id}`);
           setConfirmation({ isOpen: false, title: '', message: '', onConfirm: () => {} });
         }
       }
@@ -2597,8 +2621,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         };
 
         // 1. Map and filter data
-        const mappedBatch = data.map((item: any, index: number) => {
-          if (!item || typeof item !== 'object') return null;
+        const mappedBatchList: any[] = [];
+        data.forEach((item: any, index: number) => {
+          if (!item || typeof item !== 'object') return;
 
           let mappedItem: any = {};
           
@@ -2619,10 +2644,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             }
           });
 
-          if (Object.keys(mappedItem).length === 0) return null;
-          if (activeTab === 'Products' && !mappedItem.nombre && !mappedItem.upc && !mappedItem.sku) return null;
-          if (activeTab === 'Clients' && !mappedItem.nombre && !mappedItem.email) return null;
-          if (activeTab === 'Salesmen' && !mappedItem.nombre && !mappedItem.codigo) return null;
+          if (Object.keys(mappedItem).length === 0) return;
+          if (activeTab === 'Products' && !mappedItem.nombre && !mappedItem.upc && !mappedItem.sku) return;
+          if (activeTab === 'Clients' && !mappedItem.nombre && !mappedItem.email) return;
+          if (activeTab === 'Salesmen' && !mappedItem.nombre && !mappedItem.codigo) return;
 
           if (activeTab === 'Products') {
             const enabled = getEnabledProductHeaders();
@@ -2680,11 +2705,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             const isValidForMatch = (val: string) => val && val.length > 3 && !val.startsWith('UPC-');
 
             if (!mappedItem.id) {
-              const existing = currentData.find(p => 
+              const existingInDB = currentData.find(p => 
                 (isValidForMatch(mappedItem.upc) && p.upc === mappedItem.upc) || 
-                (isValidForMatch(mappedItem.sku) && p.sku === mappedItem.sku)
+                (isValidForMatch(mappedItem.sku) && p.sku === mappedItem.sku) ||
+                (mappedItem.nombre && p.nombre && p.nombre.toLowerCase().trim() === mappedItem.nombre.toLowerCase().trim())
               );
-              if (existing) mappedItem.id = existing.id;
+              const existingInBatch = mappedBatchList.find(p => 
+                (isValidForMatch(mappedItem.upc) && p.upc === mappedItem.upc) || 
+                (isValidForMatch(mappedItem.sku) && p.sku === mappedItem.sku) ||
+                (mappedItem.nombre && p.nombre && p.nombre.toLowerCase().trim() === mappedItem.nombre.toLowerCase().trim())
+              );
+
+              if (existingInDB || existingInBatch) {
+                const matchedProduct = existingInDB || existingInBatch;
+                mappedItem.id = matchedProduct.id;
+                mappedItem.precio = Math.max(Number(matchedProduct.precio) || 0, Number(mappedItem.precio) || 0);
+              }
+            } else {
+              const existingInDB = currentData.find(p => p.id === mappedItem.id);
+              const existingInBatch = mappedBatchList.find(p => p.id === mappedItem.id);
+              if (existingInDB || existingInBatch) {
+                const matchedProduct = existingInDB || existingInBatch;
+                mappedItem.precio = Math.max(Number(matchedProduct.precio) || 0, Number(mappedItem.precio) || 0);
+              }
             }
           }
 
@@ -2696,11 +2739,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             }
             
             if (!mappedItem.id) {
-              const existing = currentData.find(c => 
+              const existingInDB = currentData.find(c => 
                 (mappedItem.nombre && c.nombre === mappedItem.nombre) || 
                 (mappedItem.email && c.email === mappedItem.email)
               );
-              if (existing) mappedItem.id = existing.id;
+              const existingInBatch = mappedBatchList.find(c => 
+                (mappedItem.nombre && c.nombre === mappedItem.nombre) || 
+                (mappedItem.email && c.email === mappedItem.email)
+              );
+              if (existingInDB || existingInBatch) {
+                mappedItem.id = (existingInDB || existingInBatch).id;
+              }
             }
           }
 
@@ -2713,11 +2762,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             }
             
             if (!mappedItem.id) {
-              const existing = currentData.find(s => 
+              const existingInDB = currentData.find(s => 
                 (mappedItem.codigo && s.codigo === mappedItem.codigo) || 
                 (mappedItem.email && s.email === mappedItem.email)
               );
-              if (existing) mappedItem.id = existing.id;
+              const existingInBatch = mappedBatchList.find(s => 
+                (mappedItem.codigo && s.codigo === mappedItem.codigo) || 
+                (mappedItem.email && s.email === mappedItem.email)
+              );
+              if (existingInDB || existingInBatch) {
+                mappedItem.id = (existingInDB || existingInBatch).id;
+              }
             }
           }
 
@@ -2725,18 +2780,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             if (mappedItem.telefono) {
               mappedItem.telefono = formatPhoneNumber(String(mappedItem.telefono));
             }
+            
+            if (!mappedItem.id) {
+              const existingInDB = currentData.find(v => 
+                (mappedItem.nombre && v.nombre === mappedItem.nombre)
+              );
+              const existingInBatch = mappedBatchList.find(v => 
+                (mappedItem.nombre && v.nombre === mappedItem.nombre)
+              );
+              if (existingInDB || existingInBatch) {
+                mappedItem.id = (existingInDB || existingInBatch).id;
+              }
+            }
           }
 
           const finalId = (mappedItem.id && String(mappedItem.id).trim() !== '') 
             ? String(mappedItem.id) 
             : `${collectionName.slice(0, 3).toUpperCase()}-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 5)}`;
 
-          return { ...mappedItem, id: finalId, storeId: storeSettings.id };
-        }).filter(Boolean);
+          mappedBatchList.push({ ...mappedItem, id: finalId, storeId: storeSettings.id });
+        });
 
-        // 2. Deduplicate batch by ID (keep the last one in the file)
+        // 2. Deduplicate batch by ID (keep the highest price version for duplicate items)
         const uniqueBatchMap = new Map();
-        mappedBatch.forEach((item: any) => uniqueBatchMap.set(item.id, item));
+        mappedBatchList.forEach((item: any) => {
+          if (activeTab === 'Products' && uniqueBatchMap.has(item.id)) {
+            const existingInBatchMap = uniqueBatchMap.get(item.id);
+            item.precio = Math.max(Number(existingInBatchMap.precio) || 0, Number(item.precio) || 0);
+          }
+          uniqueBatchMap.set(item.id, item);
+        });
         const batch = Array.from(uniqueBatchMap.values());
 
         console.log(`Starting import of ${batch.length} unique items to ${collectionName}`);
@@ -3464,10 +3537,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           (p.sku || '').toLowerCase().includes(productSearchQuery.toLowerCase()) ||
           (p.categoria || '').toLowerCase().includes(productSearchQuery.toLowerCase());
           
+          const categoryMatch = !productCategoryFilter || (p.categoria || '').toLowerCase() === productCategoryFilter.toLowerCase();
+          
           if (businessCategory?.id === 'combo') {
-            return searchMatch && (!p.moduleType || p.moduleType === productAdminComboView);
+            return searchMatch && categoryMatch && (!p.moduleType || p.moduleType === productAdminComboView);
           }
-          return searchMatch;
+          return searchMatch && categoryMatch;
         });
         return (
           <>
@@ -3513,8 +3588,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               onDownloadTemplate={() => handleDownloadTemplate('Products')}
               onSync={handleSyncImages}
             />
-            <div className="mb-6 flex gap-4 items-center">
-              <div className="relative flex-1 max-w-md">
+            <div className="mb-6 flex flex-wrap gap-4 items-center">
+              <div className="relative flex-1 max-w-md min-w-[260px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
@@ -3524,6 +3599,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold"
                 />
               </div>
+
+              {/* Categorías Dropdown Selector */}
+              <div className="relative min-w-[180px]">
+                <select
+                  value={productCategoryFilter}
+                  onChange={(e) => setProductCategoryFilter(e.target.value)}
+                  className="w-full pl-3 pr-10 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 cursor-pointer appearance-none"
+                >
+                  <option value="">Todas las Categorías</option>
+                  {categories.map((cat: any) => (
+                    <option key={cat.id} value={cat.nombre}>
+                      {cat.nombre}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400">
+                  <ListFilter className="w-4 h-4" />
+                </div>
+              </div>
+
               <button
                 onClick={() => {
                   fetchGlobalCatalog();
@@ -3618,6 +3713,48 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Category Filter Pills Quick Access */}
+            {categories.length > 0 && (
+              <div className="mb-6 flex flex-wrap gap-2 items-center bg-slate-50 p-3 rounded-2xl border border-slate-150 shadow-sm animate-fade-in print:hidden">
+                <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider mr-2 ml-1">Quick Select Category:</span>
+                <button
+                  onClick={() => setProductCategoryFilter('')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold uppercase transition-all tracking-wider ${
+                    productCategoryFilter === ''
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-100 border border-blue-600'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 shadow-sm'
+                  }`}
+                >
+                  ALL / TODAS
+                </button>
+                {categories.map((cat: any) => {
+                  const isSelected = productCategoryFilter.toLowerCase() === cat.nombre.toLowerCase();
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setProductCategoryFilter(isSelected ? '' : cat.nombre)}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold uppercase transition-all tracking-wider flex items-center gap-2 border ${
+                        isSelected
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100'
+                          : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 shadow-sm'
+                      }`}
+                    >
+                      {cat.color ? (
+                        <span 
+                          className="w-2.5 h-2.5 rounded-full border border-black/10" 
+                          style={{ backgroundColor: cat.color }}
+                        />
+                      ) : (
+                        <span className="w-2.5 h-2.5 rounded-full border border-black/10 bg-slate-300" />
+                      )}
+                      <span>{cat.nombre}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {renderTable(
               [
                 'Img',
@@ -4449,7 +4586,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <>
             <ActionHeader title="Categories" onAdd={() => setIsCreatingCategory(true)} onClean={() => handleCleanAll('categories', setCategories, 'Categories')} />
             {renderTable(
-              ['ID', 'Nombre', 'Taxes', 'EBT SNAP', 'Fondo', 'Borde', 'Quick Access', ...(businessCategory?.id === 'combo' ? ['Module Type'] : [])],
+              ['ID', 'Nombre', 'Taxes', 'EBT SNAP', 'Fondo', 'Borde', 'Quick Access', ...(businessCategory?.id === 'combo' ? ['Module Type'] : []), 'Acciones'],
               categories,
               (c: Category) => (
                 <>
@@ -4569,6 +4706,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </select>
                     </td>
                   )}
+                  <td className="px-6 py-3">
+                    <button 
+                      onClick={() => handleDeleteCategory(c.id)}
+                      className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete Category"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </td>
                 </>
               )
             )}
@@ -4936,6 +5082,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </>
         );
       }
+
+      case 'Label Printer':
+        return (
+          <LabelPrinter 
+            products={products} 
+            storeSettings={storeSettings} 
+            categories={categories} 
+          />
+        );
 
       case 'Settings':
         return (

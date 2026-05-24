@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Building2, Users, Package, Settings, Search, Trash2, ShieldCheck, Sparkles, LogOut, RefreshCw, CheckCircle, XCircle, Plus, Minus, X, Tag, ListFilter, Upload, Download, CreditCard, FileText, TrendingUp, TrendingDown, DollarSign, Briefcase, FolderOpen, Send, Filter, Link, Power, Globe } from 'lucide-react';
+import { Building2, Users, Package, Settings, Search, Trash2, ShieldCheck, Sparkles, LogOut, RefreshCw, CheckCircle, XCircle, Plus, Minus, X, Tag, ListFilter, Upload, Download, CreditCard, FileText, TrendingUp, TrendingDown, DollarSign, Briefcase, FolderOpen, Send, Filter, Link, Power, Globe, Cpu, Activity } from 'lucide-react';
 import { collection, onSnapshot, query, doc, deleteDoc, updateDoc, setDoc, getDocs, writeBatch, addDoc, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, handleFirestoreError, OperationType } from '../firebase';
@@ -37,6 +37,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
   const [demoRequests, setDemoRequests] = useState<any[]>([]);
   const [merchantRegistrations, setMerchantRegistrations] = useState<MerchantRegistration[]>([]);
   const [selectedReg, setSelectedReg] = useState<MerchantRegistration | null>(null);
+  const [testingReg, setTestingReg] = useState<MerchantRegistration | null>(null);
+  const [simTerminal, setSimTerminal] = useState<'Pax A920' | 'Dejavoo QD4' | 'Clover Flex'>('Pax A920');
+  const [simAmount, setSimAmount] = useState<string>('150.00');
+  const [simCardType, setSimCardType] = useState<'visa' | 'mc' | 'amex' | 'discover'>('visa');
+  const [simMethod, setSimMethod] = useState<'tap' | 'chip' | 'swipe'>('chip');
+  const [simStatus, setSimStatus] = useState<'idle' | 'inserting' | 'processing' | 'approved' | 'declined'>('idle');
+  const [simLogs, setSimLogs] = useState<string[]>([]);
+  const [simCommissionRate, setSimCommissionRate] = useState<number>(0.4);
+  const [simInterchange, setSimInterchange] = useState<number>(1.8);
   const [zoomImg, setZoomImg] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -83,6 +92,38 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
   const globalCatalogInputRef = useRef<HTMLInputElement>(null);
   const [showUrlModal, setShowUrlModal] = useState(false);
   const [importUrl, setImportUrl] = useState('');
+
+  const handleSimulateTransaction = (approved: boolean) => {
+    setSimStatus('processing');
+    setSimLogs(prev => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] Iniciando procesamiento en terminal ${simTerminal}...`,
+      `[${new Date().toLocaleTimeString()}] Conectando con red de adquirencia usando protocolo seguro TLS 1.3...`,
+      `[${new Date().toLocaleTimeString()}] Tokenizando credenciales de tarjeta (${simCardType.toUpperCase()}) vía chip/EMV...`
+    ]);
+
+    setTimeout(() => {
+      if (approved) {
+        setSimStatus('approved');
+        setSimLogs(prev => [
+          ...prev,
+          `[${new Date().toLocaleTimeString()}] Resonancia EMV exitosa. Transmisión de datos autorizada.`,
+          `[${new Date().toLocaleTimeString()}] RESPUESTA RED: APROBADO - CÓDIGO DE AUTORIZACIÓN: ${Math.floor(100000 + Math.random() * 900000)}`,
+          `[${new Date().toLocaleTimeString()}] Registro de prueba completado con éxito. Depósito de garantía verificado.`
+        ]);
+        toast.success(`Pago de prueba de $${parseFloat(simAmount).toFixed(2)} APROBADO con Éxito`);
+      } else {
+        setSimStatus('declined');
+        setSimLogs(prev => [
+          ...prev,
+          `[${new Date().toLocaleTimeString()}] ERROR DE TRANSACCIÓN: FONDOS INSUFICIENTES (051) o TARJETA DENEGADA.`,
+          `[${new Date().toLocaleTimeString()}] RESPUESTA RED: RECHAZADO por el banco emisor.`,
+          `[${new Date().toLocaleTimeString()}] Prueba completada: Simulación de fallo en cobro exitoso.`
+        ]);
+        toast.error(`Pago de prueba de $${parseFloat(simAmount).toFixed(2)} RECHAZADO por el banco emisor`);
+      }
+    }, 1500);
+  };
 
   const sanitizeForFirestore = (obj: any): any => {
     if (obj === null || obj === undefined) return obj;
@@ -1954,9 +1995,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
                             <span className={`px-2 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
                               reg.status === 'approved' 
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : reg.status === 'rejected'
-                                  ? 'bg-red-50 text-red-700 border border-red-200'
-                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : reg.status === 'testing'
+                                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                  : reg.status === 'rejected'
+                                    ? 'bg-red-50 text-red-700 border border-red-200'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
                             }`}>
                               {reg.status || 'pending'}
                             </span>
@@ -2250,29 +2293,62 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
                   </div>
 
                   {/* Modal Footer Controls */}
-                  <div className="p-6 border-t border-slate-100 flex items-center justify-between bg-slate-50">
+                  <div className="p-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50">
                     <button
                       onClick={() => setSelectedReg(null)}
-                      className="px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-sm rounded-xl transition"
+                      className="w-full sm:w-auto px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-sm rounded-xl transition"
                     >
                       Close Window
                     </button>
 
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await updateDoc(doc(db, 'merchantRegistrations', selectedReg.id), { status: 'testing' });
+                            toast.success('Onboarding Application set to TESTING/PRUEBA mode');
+                            setMerchantRegistrations(prev => prev.map(r => r.id === selectedReg.id ? { ...r, status: 'testing' } : r));
+                            setSelectedReg(null);
+                          } catch (err) {
+                            toast.error('Failed to set testing status');
+                          }
+                        }}
+                        disabled={selectedReg.status === 'testing'}
+                        className="px-4 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-extrabold text-xs uppercase tracking-wider rounded-xl transition disabled:opacity-40"
+                      >
+                        Poner en Pruebas
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setTestingReg(selectedReg);
+                          setSimStatus('idle');
+                          setSimLogs([
+                            `[INFO] POS Terminal Hardware Sandbox initialized for ${selectedReg.busStoreNameDba}...`,
+                            `[READY] Device on standby. Select a transaction configuration on the right and click "Test Transaction".`
+                          ]);
+                          setSelectedReg(null);
+                        }}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition shadow-md shadow-indigo-100 flex items-center gap-1.5"
+                      >
+                        Probar en Simulador 💳
+                      </button>
+
                       <button
                         onClick={async () => {
                           try {
                             await updateDoc(doc(db, 'merchantRegistrations', selectedReg.id), { status: 'rejected' });
                             toast.success('Onboarding Application REJECTED/DENIED');
+                            setMerchantRegistrations(prev => prev.map(r => r.id === selectedReg.id ? { ...r, status: 'rejected' } : r));
                             setSelectedReg(null);
                           } catch (err) {
                             toast.error('Failed to update status');
                           }
                         }}
                         disabled={selectedReg.status === 'rejected'}
-                        className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition disabled:opacity-35"
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition disabled:opacity-35"
                       >
-                        Reject Application
+                        Reject
                       </button>
 
                       <button
@@ -2280,13 +2356,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
                           try {
                             await updateDoc(doc(db, 'merchantRegistrations', selectedReg.id), { status: 'approved' });
                             toast.success('Onboarding Application APPROVED successfully!');
+                            setMerchantRegistrations(prev => prev.map(r => r.id === selectedReg.id ? { ...r, status: 'approved' } : r));
                             setSelectedReg(null);
                           } catch (err) {
                             toast.error('Failed to update status');
                           }
                         }}
                         disabled={selectedReg.status === 'approved'}
-                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition shadow-lg shadow-emerald-100 disabled:opacity-35"
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition shadow-lg shadow-emerald-100 disabled:opacity-35"
                       >
                         Approve Merchant
                       </button>
@@ -2316,6 +2393,394 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
                     className="w-full h-auto max-h-[80vh] object-contain rounded-lg border border-slate-700"
                     referrerPolicy="no-referrer"
                   />
+                </div>
+              </div>
+            )}
+
+            {/* TESTING SANDBOX MODAL */}
+            {testingReg && (
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[95vh] overflow-hidden flex flex-col">
+                  
+                  {/* Header */}
+                  <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl">
+                        <Cpu className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <span className="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded text-[9px] font-black uppercase tracking-widest border border-indigo-500/30">
+                          Interactive hardware Sandbox
+                        </span>
+                        <h3 className="text-lg font-black text-white mt-0.5">
+                          POS Terminal & Commission Simulator
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                          Testing credit card processing setup for <span className="text-indigo-400 font-bold">{testingReg.busStoreNameDba}</span> (Rep: {testingReg.salesmanName})
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setTestingReg(null)}
+                      className="p-2 text-slate-400 hover:bg-slate-800 hover:text-white rounded-xl transition"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Body Content */}
+                  <div className="p-6 md:p-8 overflow-y-auto grid grid-cols-1 md:grid-cols-12 gap-8 flex-1">
+                    
+                    {/* Left Grid: Hardware / Card Reader Simulator */}
+                    <div className="md:col-span-5 flex flex-col items-center justify-between space-y-6 border-r border-slate-800 pr-0 md:pr-8">
+                      <div className="w-full space-y-4">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                          <Activity className="w-4 h-4 text-indigo-400" />
+                          1. Configure Device Sensor
+                        </h4>
+                        
+                        <div className="grid grid-cols-3 gap-2">
+                          {(['Pax A920', 'Dejavoo QD4', 'Clover Flex'] as const).map(term => (
+                            <button
+                              key={term}
+                              onClick={() => {
+                                setSimTerminal(term);
+                                setSimLogs(prev => [...prev, `[INFO] Conmutando terminal activa a: ${term}`]);
+                              }}
+                              className={`py-2 px-2.5 rounded-xl border text-[10px] font-bold text-center uppercase tracking-wider transition ${
+                                simTerminal === term 
+                                  ? 'bg-indigo-600 border-indigo-500 text-white shadow-md' 
+                                  : 'bg-slate-800/45 border-slate-700/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                              }`}
+                            >
+                              {term}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 pt-1">
+                          {(['chip', 'tap', 'swipe'] as const).map(met => (
+                            <button
+                              key={met}
+                              onClick={() => {
+                                setSimMethod(met);
+                                setSimLogs(prev => [...prev, `[INFO] Conmutando interfaz del lector de tarjeta a: ${met.toUpperCase()}`]);
+                              }}
+                              className={`py-2 px-1 rounded-xl border text-[10px] font-bold text-center uppercase tracking-wider transition ${
+                                simMethod === met 
+                                  ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' 
+                                  : 'bg-slate-800/20 border-slate-800 text-slate-500 hover:bg-slate-800 hover:text-slate-300'
+                              }`}
+                            >
+                              {met === 'chip' ? 'Dip (Chip)' : met === 'tap' ? 'NFC (Tap)' : 'Mag (Swipe)'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Graphic Terminal Device Display */}
+                      <div className="w-full max-w-[260px] bg-slate-950 rounded-[2.5rem] border-4 border-slate-700 p-4 shadow-xl relative overflow-hidden flex flex-col items-center">
+                        {/* Status LEDs indicators */}
+                        <div className="flex gap-2 mb-3">
+                          <div className={`w-2.5 h-2.5 rounded-full ${simStatus === 'processing' ? 'bg-amber-500 animate-ping' : simStatus === 'approved' ? 'bg-emerald-500' : 'bg-slate-800'}`} />
+                          <div className={`w-2.5 h-2.5 rounded-full ${simStatus === 'approved' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-800'}`} />
+                          <div className={`w-2.5 h-2.5 rounded-full ${simStatus === 'declined' ? 'bg-red-500 animate-pulse' : 'bg-slate-800'}`} />
+                        </div>
+
+                        {/* Device Screen */}
+                        <div className="w-full h-36 bg-blue-950/40 border border-blue-900 rounded-2xl p-3 flex flex-col justify-between items-center text-center font-mono">
+                          <span className="text-[9px] text-blue-400 font-extrabold uppercase tracking-widest">{simTerminal} ACTIVE</span>
+                          
+                          <div className="text-white text-xs font-black uppercase tracking-wider py-1 select-none">
+                            {simStatus === 'idle' && "STANDBY - READY"}
+                            {simStatus === 'inserting' && "Dip card..."}
+                            {simStatus === 'processing' && "PROCESSING..."}
+                            {simStatus === 'approved' && "APPROVED ✔"}
+                            {simStatus === 'declined' && "DECLINED ✖"}
+                          </div>
+
+                          <span className="text-[11px] text-blue-300 font-bold bg-blue-950/80 px-2.5 py-0.5 rounded-lg border border-blue-900 font-mono">
+                            USD ${parseFloat(simAmount).toFixed(2)}
+                          </span>
+                        </div>
+
+                        {/* Physical slot graphical highlight */}
+                        <div className="w-full mt-4 flex flex-col items-center gap-1">
+                          <div className={`w-11/12 h-2.5 rounded bg-slate-800 border ${simMethod === 'chip' ? 'border-indigo-400 animate-pulse' : 'border-slate-900'} relative`} />
+                          <span className="text-[8px] font-black tracking-widest text-slate-500 uppercase">
+                            {simMethod === 'chip' ? 'DIPIAR CHIP EMV AQUÍ' : simMethod === 'tap' ? 'APROXIMAR MÓVIL/TARJETA (NFC)' : 'DESLIZAR BANDA MAGNÉTICA'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Mock Credit Card Graphics */}
+                      <div className="w-full space-y-3">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
+                          Card Emulator (Tarjeta del Cliente)
+                        </span>
+                        
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {(['visa', 'mc', 'amex', 'discover'] as const).map(brand => (
+                            <button
+                              key={brand}
+                              onClick={() => {
+                                setSimCardType(brand);
+                                setSimLogs(prev => [...prev, `[INFO] Tarjeta simulada cambiada a la marca: ${brand.toUpperCase()}`]);
+                              }}
+                              className={`py-1.5 px-1 bg-slate-800/60 rounded-xl border text-[10px] font-black uppercase text-center tracking-wider transition ${
+                                simCardType === brand 
+                                  ? 'border-indigo-500 text-indigo-400' 
+                                  : 'border-transparent text-slate-500 hover:text-slate-300'
+                              }`}
+                            >
+                              {brand}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="bg-gradient-to-br from-indigo-900/60 to-purple-900/60 rounded-2xl border border-indigo-500/20 p-4 font-mono relative text-white text-left select-none overflow-hidden h-28 flex flex-col justify-between">
+                          <div className="flex justify-between items-start">
+                            <span className="text-xs font-black uppercase text-indigo-300">
+                              {simCardType.toUpperCase()} BUSINESS GOLD
+                            </span>
+                            <div className="w-7 h-5 bg-amber-400/80 rounded-sm border border-amber-300" />
+                          </div>
+                          <div className="text-sm font-bold tracking-widest">
+                            {simCardType === 'visa' && "4111 2222 5555 9843"}
+                            {simCardType === 'mc' && "5412 8831 2201 1149"}
+                            {simCardType === 'amex' && "3782 129483 11048"}
+                            {simCardType === 'discover' && "6011 8832 9481 0541"}
+                          </div>
+                          <div className="flex justify-between items-end text-[9px] text-indigo-300">
+                            <div>
+                              <span>HOLDER: </span>
+                              <span className="font-extrabold text-white block uppercase">{testingReg.ownerFirstName} {testingReg.ownerLastName}</span>
+                            </div>
+                            <div className="text-right">
+                              <span>EXPIRES: </span>
+                              <span className="font-bold text-white block">07 / 2029</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Grid: Fee Calculations & Testing Sandbox Console */}
+                    <div className="md:col-span-7 flex flex-col justify-between space-y-6">
+                      
+                      {/* Subtitle / Projections */}
+                      <div className="space-y-4">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5"><DollarSign className="w-4 h-4 text-indigo-400" /> 2. Set Rates & Projection values</span>
+                          <span className="text-[10px] text-indigo-400 font-extrabold">Dual-Engine Surcharge Pricing</span>
+                        </h4>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+                            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                              Simulated Gross Charge (Venta)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-black text-xs">$</span>
+                              <input
+                                type="number"
+                                step="10.00"
+                                value={simAmount}
+                                onChange={(e) => setSimAmount(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-700/80 pl-6 pr-3 py-1.5 rounded-xl font-mono text-xs text-white focus:outline-none focus:border-indigo-500"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+                            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                              Interchange Rate % (Network Cost)
+                            </label>
+                            <input
+                              type="range"
+                              min="0.8"
+                              max="3.0"
+                              step="0.1"
+                              value={simInterchange}
+                              onChange={(e) => setSimInterchange(parseFloat(e.target.value))}
+                              className="w-full accent-indigo-500 my-1 font-mono"
+                            />
+                            <div className="flex justify-between text-[10px] font-mono font-bold text-indigo-300 mt-1">
+                              <span>Cost: {simInterchange.toFixed(1)}%</span>
+                              <span>Est: ${((parseFloat(simAmount) || 0) * simInterchange / 100).toFixed(2)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 pt-1">
+                          <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+                            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                              Salesperson Residual Split %
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="90"
+                              step="5"
+                              value={simCommissionRate * 100}
+                              onChange={(e) => setSimCommissionRate(parseFloat(e.target.value) / 100)}
+                              className="w-full accent-indigo-500 my-1 font-mono"
+                            />
+                            <div className="flex justify-between text-[10px] font-mono font-bold text-indigo-300 mt-1">
+                              <span>Rep Split: {(simCommissionRate * 100).toFixed(0)}%</span>
+                              <span>Company: {((1 - simCommissionRate) * 100).toFixed(0)}%</span>
+                            </div>
+                          </div>
+
+                          {/* Static Surcharge configuration info */}
+                          <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 flex flex-col justify-between">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Merchant Fee Engine</span>
+                            <div className="text-xs font-black text-indigo-400 flex items-center justify-between pb-1">
+                              <span>Cash-Discount Fee:</span>
+                              <span className="font-mono">3.5% Flat</span>
+                            </div>
+                            <span className="text-[8.5px] text-slate-500 leading-tight block">Merchant surcharge automatically transfers processing charges to the cardholder, rendering payment routing free for the store owner.</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Calculations Panel */}
+                      {(() => {
+                        const amountVal = parseFloat(simAmount) || 0;
+                        const surchargeCharged = amountVal * 0.035;
+                        const costInterchange = amountVal * (simInterchange / 100);
+                        const grossProfitMargin = Math.max(0, surchargeCharged - costInterchange);
+                        const repShare = grossProfitMargin * simCommissionRate;
+                        const companyNet = grossProfitMargin * (1 - simCommissionRate);
+
+                        return (
+                          <div className="bg-slate-950 rounded-2xl border border-slate-800 p-5 space-y-4">
+                            <h5 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-800 pb-2">
+                              Transaction Profit/Split Analysis (Cuentas e Intereses)
+                            </h5>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                              <div className="border border-slate-800 p-3 rounded-xl bg-slate-900/40">
+                                <span className="text-[8px] text-slate-500 font-bold block uppercase tracking-wider">Gross Surcharge (3.5%)</span>
+                                <span className="text-sm font-black text-white font-mono mt-0.5 block">${surchargeCharged.toFixed(2)}</span>
+                              </div>
+                              <div className="border border-slate-800 p-3 rounded-xl bg-slate-900/40">
+                                <span className="text-[8px] text-slate-500 font-bold block uppercase tracking-wider">Interchange Cost ({simInterchange.toFixed(1)}%)</span>
+                                <span className="text-sm font-black text-red-400 font-mono mt-0.5 block">-${costInterchange.toFixed(2)}</span>
+                              </div>
+                              <div className="border border-slate-800 p-3 rounded-xl bg-slate-900/40">
+                                <span className="text-[8px] text-slate-500 font-bold block uppercase tracking-wider">Residual Profit Margin</span>
+                                <span className="text-sm font-black text-indigo-400 font-mono mt-0.5 block">${grossProfitMargin.toFixed(2)}</span>
+                              </div>
+                              <div className="border border-slate-800 p-3 rounded-xl bg-indigo-950/20 border-indigo-500/20">
+                                <span className="text-[8px] text-indigo-400 font-bold block uppercase tracking-wider">Net Settlement</span>
+                                <span className="text-sm font-black text-emerald-400 font-mono mt-0.5 block">${(amountVal).toFixed(2)}</span>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 pt-1">
+                              <div className="bg-slate-900/60 rounded-xl p-3 border border-slate-800 flex items-center justify-between">
+                                <div>
+                                  <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest block">Sales Advisor Share ({(simCommissionRate * 100).toFixed(0)}%)</span>
+                                  <span className="text-sm font-black text-white font-mono mt-0.5 block">${repShare.toFixed(2)}</span>
+                                </div>
+                                <span className="text-[9px] bg-slate-800 text-slate-300 font-bold px-2 py-0.5 rounded uppercase font-sans">Residual</span>
+                              </div>
+
+                              <div className="bg-slate-900/60 rounded-xl p-3 border border-slate-800 flex items-center justify-between">
+                                <div>
+                                  <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest block">Net Company Revenue ({((1 - simCommissionRate) * 100).toFixed(0)}%)</span>
+                                  <span className="text-sm font-black text-indigo-400 font-mono mt-0.5 block">${companyNet.toFixed(2)}</span>
+                                </div>
+                                <span className="text-[9px] bg-indigo-500/10 text-indigo-300 font-bold px-2 py-0.5 rounded uppercase font-semibold font-sans">Platform Profit</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Log Console Output Simulator */}
+                      <div className="w-full space-y-2">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
+                          Card Verification Logs (Historial de Procesamiento)
+                        </span>
+                        
+                        <div className="h-32 bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-[10px] text-slate-300 space-y-1.5 overflow-y-auto select-text text-left">
+                          {simLogs.map((log, lidx) => (
+                            <div key={lidx} className={`${log.includes('[SUCCESS]') || log.includes('APROBADO') ? 'text-emerald-400' : log.includes('ERROR') || log.includes('RECHAZADO') ? 'text-red-400' : 'text-slate-300'}`}>
+                              {log}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Simulation Triggers */}
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          onClick={() => handleSimulateTransaction(false)}
+                          disabled={simStatus === 'processing'}
+                          className="flex-1 py-3 bg-red-600/10 border border-red-500/30 text-red-400 hover:bg-red-600/20 rounded-xl text-xs font-black uppercase tracking-widest transition disabled:opacity-40 font-sans"
+                        >
+                          Simular Declinar Pago (Decline Test)
+                        </button>
+
+                        <button
+                          onClick={() => handleSimulateTransaction(true)}
+                          disabled={simStatus === 'processing'}
+                          className="flex-1 py-3 bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-600/20 rounded-xl text-xs font-black uppercase tracking-widest transition disabled:opacity-40 shadow-lg shadow-emerald-950/20 font-sans"
+                        >
+                          Simular Aprobar Pago (Approve Test)
+                        </button>
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  {/* Simulator Footer Controls and approvals */}
+                  <div className="p-6 border-t border-slate-800 flex items-center justify-between bg-slate-950">
+                    <button
+                      onClick={() => setTestingReg(null)}
+                      className="px-5 py-2.5 bg-slate-900 border border-slate-700 hover:bg-slate-800 text-slate-300 font-bold text-sm rounded-xl transition"
+                    >
+                      Exit Simulator Sandbox
+                    </button>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await updateDoc(doc(db, 'merchantRegistrations', testingReg.id), { status: 'rejected' });
+                            toast.success('Onboarding Application REJECTED from simulator logs review');
+                            setMerchantRegistrations(prev => prev.map(r => r.id === testingReg.id ? { ...r, status: 'rejected' } : r));
+                            setTestingReg(null);
+                          } catch (err) {
+                            toast.error('Failed to deny registration');
+                          }
+                        }}
+                        className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition shadow-lg shadow-red-100 font-sans"
+                      >
+                        Rechazar Solicitud
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          try {
+                            await updateDoc(doc(db, 'merchantRegistrations', testingReg.id), { status: 'approved' });
+                            toast.success('Onboarding Application APPROVED successfully via hardware testing logs validation!');
+                            setMerchantRegistrations(prev => prev.map(r => r.id === testingReg.id ? { ...r, status: 'approved' } : r));
+                            setTestingReg(null);
+                          } catch (err) {
+                            toast.error('Failed to approve registration');
+                          }
+                        }}
+                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition shadow-lg shadow-emerald-100 font-sans"
+                      >
+                        Aprobar Solicitud
+                      </button>
+                    </div>
+                  </div>
+
                 </div>
               </div>
             )}

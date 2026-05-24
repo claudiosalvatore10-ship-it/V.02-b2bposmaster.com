@@ -347,6 +347,12 @@ const MainPOS: React.FC = () => {
     const qCategories = query(collection(db, 'categories'), where('storeId', '==', userStoreId));
     const unsubCategories = onSnapshot(qCategories, (snapshot) => {
       const allCategories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
+      allCategories.sort((a, b) => {
+        const orderA = a.order !== undefined ? a.order : 9999;
+        const orderB = b.order !== undefined ? b.order : 9999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.nombre.localeCompare(b.nombre);
+      });
       setCategories(allCategories);
     }, (error) => handleFirestoreError(error, OperationType.GET, 'categories'));
 
@@ -1078,6 +1084,41 @@ const MainPOS: React.FC = () => {
     );
   }
 
+    const handleReorderCategories = async (orderedCategories: Category[]) => {
+      let updatedCategories = [...categories];
+      const filteredIds = new Set(orderedCategories.map(c => c.id));
+      const nonFiltered = categories.filter(c => !filteredIds.has(c.id));
+      
+      const orderedWithIndex = orderedCategories.map((cat, i) => ({
+        ...cat,
+        order: i
+      }));
+
+      updatedCategories = [...orderedWithIndex, ...nonFiltered];
+      
+      updatedCategories.sort((a, b) => {
+        const orderA = a.order !== undefined ? a.order : 9999;
+        const orderB = b.order !== undefined ? b.order : 9999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.nombre.localeCompare(b.nombre);
+      });
+
+      setCategories(updatedCategories);
+
+      try {
+        const batch = writeBatch(db);
+        orderedWithIndex.forEach((cat) => {
+          const catRef = doc(db, 'categories', cat.id);
+          batch.update(catRef, { order: cat.order });
+        });
+        await batch.commit();
+        toast.success(t('Categories reordered successfully!', 'Categorías reordenadas con éxito'));
+      } catch (error) {
+        console.error("Error saving category order: ", error);
+        toast.error(t('Failed to save category order', 'Error al guardar el orden de las categorías'));
+      }
+    };
+
   if (showStoreSetup) {
     return <StoreSetup user={user} onComplete={(id) => {
       setUserStoreId(id);
@@ -1656,6 +1697,7 @@ const MainPOS: React.FC = () => {
               <GroceryView 
                 products={filteredProducts}
                 categories={filteredCategories}
+                onReorderCategories={handleReorderCategories}
                 cart={isReceiveMode ? receiveCart : cart}
                 onAddToCart={handleAddToCart}
                 onUpdateQuantity={handleUpdateQuantity}

@@ -316,6 +316,7 @@ export interface Category {
   quickAccess?: boolean;
   moduleType?: 'grocery' | 'restaurant';
   ebt?: boolean;
+  order?: number;
 }
 
 export interface Tax {
@@ -341,7 +342,7 @@ export interface MerchantRegistration {
   storeId?: string;
   salesmanId: string;
   salesmanName: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'testing';
   createdAt: number;
   notes?: string;
 

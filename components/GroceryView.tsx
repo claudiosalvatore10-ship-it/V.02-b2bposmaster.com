@@ -8,7 +8,7 @@ import {
   Tag, Package, ChevronRight, Calculator,
   Grid, List, Sparkles, Smartphone,
   MinusCircle, PlusCircle, X, Truck, UserPlus, Percent, Star,
-  RefreshCw, ArrowLeft
+  RefreshCw, ArrowLeft, GripVertical
 } from 'lucide-react';
 import { Product, CartItem, StoreSettings, Category, Tax, BusinessCategory, Salesman, Vendor } from '../types';
 import { EditCartItemModal } from './EditCartItemModal';
@@ -16,6 +16,7 @@ import { EditCartItemModal } from './EditCartItemModal';
 interface GroceryViewProps {
   products: Product[];
   categories: Category[];
+  onReorderCategories?: (reordered: Category[]) => void;
   cart: CartItem[];
   onAddToCart: (product: Product, quantity: number) => void;
   onUpdateQuantity: (cartId: string, quantity: number) => void;
@@ -36,6 +37,7 @@ interface GroceryViewProps {
 export const GroceryView: React.FC<GroceryViewProps> = ({
   products,
   categories,
+  onReorderCategories,
   cart,
   onAddToCart,
   onUpdateQuantity,
@@ -62,6 +64,47 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
   const [checkRef, setCheckRef] = useState('');
   const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
   const [isPreOrderMode, setIsPreOrderMode] = useState<boolean>(false);
+
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const reordered = [...categories];
+    const [draggedItem] = reordered.splice(draggedIndex, 1);
+    reordered.splice(index, 0, draggedItem);
+
+    if (onReorderCategories) {
+      onReorderCategories(reordered);
+    }
+    
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
 
   const handleNumpadPress = (value: string) => {
     if (value === 'C') {
@@ -627,42 +670,57 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 xl:gap-5 pb-12">
-            {categories.map(cat => (
-              <motion.button
-                key={cat.id}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => {
-                  const amountVal = parseFloat(numpadValue);
-                  if (amountVal > 0) {
-                    const genericProduct: Product = {
-                      id: `GEN-${cat.id || String(Math.random())}-${Date.now()}`,
-                      upc: '',
-                      sku: '',
-                      nombre: `Venta ${cat.nombre}`,
-                      precio: amountVal,
-                      costo: 0,
-                      categoria: cat.nombre,
-                      stock: 9999,
-                      imagenUrl: '',
-                      descuento: 0
-                    };
-                    onAddToCart(genericProduct, 1);
-                    setNumpadValue('0.00');
-                    toast.success(`Agregado: ${cat.nombre} $${amountVal.toFixed(2)}`);
-                  } else {
-                    setSelectedCategory(selectedCategory === cat.nombre ? null : cat.nombre);
-                  }
-                }}
-                style={{ 
-                  backgroundColor: cat.color || '#ffffff', 
-                  borderColor: selectedCategory === cat.nombre ? '#34d399' : (cat.borderColor || '#f1f5f9') 
-                }}
-                className={`px-4 py-8 xl:py-10 rounded-[2.5rem] transition-all flex flex-col items-center justify-center gap-4 relative group overflow-hidden ${selectedCategory === cat.nombre ? 'border-2 ring-4 ring-emerald-500/10' : 'border'}`}
-              >
-                <span className="font-black text-slate-800 uppercase tracking-widest z-10 text-center text-[11px] xl:text-xs px-2">{cat.nombre}</span>
-              </motion.button>
-            ))}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 xl:gap-5 pb-12 font-sans">
+            {categories.map((cat, index) => {
+              const isDragged = draggedIndex === index;
+              const isDragOver = dragOverIndex === index;
+              return (
+                <motion.button
+                  key={cat.id}
+                  whileTap={{ scale: 0.98 }}
+                  draggable={true}
+                  onDragStart={(e) => handleDragStart(e, index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDrop={(e) => handleDrop(e, index)}
+                  onDragEnd={handleDragEnd}
+                  onClick={() => {
+                    const amountVal = parseFloat(numpadValue);
+                    if (amountVal > 0) {
+                      const genericProduct: Product = {
+                        id: `GEN-${cat.id || String(Math.random())}-${Date.now()}`,
+                        upc: '',
+                        sku: '',
+                        nombre: `Venta ${cat.nombre}`,
+                        precio: amountVal,
+                        costo: 0,
+                        categoria: cat.nombre,
+                        stock: 9999,
+                        imagenUrl: '',
+                        descuento: 0
+                      };
+                      onAddToCart(genericProduct, 1);
+                      setNumpadValue('0.00');
+                      toast.success(`Agregado: ${cat.nombre} $${amountVal.toFixed(2)}`);
+                    } else {
+                      setSelectedCategory(selectedCategory === cat.nombre ? null : cat.nombre);
+                    }
+                  }}
+                  style={{ 
+                    backgroundColor: cat.color || '#ffffff', 
+                    borderColor: selectedCategory === cat.nombre ? '#34d399' : (isDragOver ? '#3b82f6' : (cat.borderColor || '#f1f5f9')),
+                    opacity: isDragged ? 0.4 : 1,
+                    cursor: draggedIndex !== null ? 'grabbing' : 'grab'
+                  }}
+                  className={`px-4 py-8 xl:py-10 rounded-[2.5rem] transition-all flex flex-col items-center justify-center gap-4 relative group overflow-hidden ${selectedCategory === cat.nombre ? 'border-2 ring-4 ring-emerald-500/10' : 'border'} ${isDragOver ? 'ring-4 ring-blue-500/20' : ''}`}
+                >
+                  {/* Subtle drag grid icon */}
+                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-40 transition-opacity">
+                    <GripVertical className="w-4 h-4 text-slate-500" />
+                  </div>
+                  <span className="font-black text-slate-800 uppercase tracking-widest z-10 text-center text-[11px] xl:text-xs px-2 select-none">{cat.nombre}</span>
+                </motion.button>
+              );
+            })}
              <motion.button
                 whileTap={{ scale: 0.98 }}
                 className="bg-slate-200/50 p-6 rounded-[2.5rem] flex items-center justify-center border-2 border-dashed border-slate-300 hover:bg-slate-200 transition-colors"
