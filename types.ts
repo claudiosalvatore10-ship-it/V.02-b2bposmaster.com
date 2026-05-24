@@ -182,6 +182,12 @@ export interface Salesman {
   taxId: string;
   activo: boolean;
   pin?: string;
+  posPrice?: number;
+  commissionRate?: number;
+  commissionType?: 'fixed' | 'percentage';
+  ssn?: string;
+  taxClassification?: 'W2' | '1099';
+  settlementFrequency?: 'weekly' | 'biweekly' | 'monthly';
 }
 
 export interface SelectedModifier {

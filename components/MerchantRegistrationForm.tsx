@@ -9,6 +9,7 @@ import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
 import { MerchantRegistration, Salesman } from '../types';
 import { toast } from 'sonner';
+import { formatPhoneNumber, formatSsn, formatTaxId } from '../utils';
 
 interface MerchantRegistrationFormProps {
   onBackToLanding?: () => void;
@@ -93,7 +94,7 @@ export default function MerchantRegistrationForm({ onBackToLanding, fixedSalesma
   useEffect(() => {
     const fetchSalesmen = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, 'salesmen'));
+        const querySnapshot = await getDocs(collection(db, 'salesreps'));
         const activeSalesmen = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
@@ -162,26 +163,15 @@ export default function MerchantRegistrationForm({ onBackToLanding, fixedSalesma
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    // Format on the fly: (XXX) XXX-XXXX
-    const rawVal = value.replace(/\D/g, '').slice(0, 10);
-    let formatted = rawVal;
-    if (rawVal.length > 3 && rawVal.length <= 6) {
-      formatted = `(${rawVal.slice(0, 3)}) ${rawVal.slice(3)}`;
-    } else if (rawVal.length > 6) {
-      formatted = `(${rawVal.slice(0, 3)}) ${rawVal.slice(3, 6)}-${rawVal.slice(6)}`;
-    }
-    setFormData(prev => ({ ...prev, [name]: formatted }));
+    setFormData(prev => ({ ...prev, [name]: formatPhoneNumber(value) }));
   };
 
   const handleSsnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawVal = e.target.value.replace(/\D/g, '').slice(0, 9);
-    let formatted = rawVal;
-    if (rawVal.length > 3 && rawVal.length <= 5) {
-      formatted = `${rawVal.slice(0, 3)}-${rawVal.slice(3)}`;
-    } else if (rawVal.length > 5) {
-      formatted = `${rawVal.slice(0, 3)}-${rawVal.slice(3, 5)}-${rawVal.slice(5)}`;
-    }
-    setFormData(prev => ({ ...prev, ownerSsn: formatted }));
+    setFormData(prev => ({ ...prev, ownerSsn: formatSsn(e.target.value) }));
+  };
+
+  const handleTaxIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, busTaxId: formatTaxId(e.target.value) }));
   };
 
   const handleRoutingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -693,7 +683,7 @@ export default function MerchantRegistrationForm({ onBackToLanding, fixedSalesma
                       type="text" 
                       name="busTaxId" 
                       value={formData.busTaxId} 
-                      onChange={handleChange}
+                      onChange={handleTaxIdChange}
                       placeholder="XX-XXXXXXX"
                       className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition text-slate-800"
                     />

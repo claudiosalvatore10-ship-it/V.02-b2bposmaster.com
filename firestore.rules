@@ -108,6 +108,14 @@ service cloud.firestore {
       allow delete: if isValidId(salesmanId) && isAdmin() && isStoreUser(existing().get('storeId', null));
     }
 
+    match /salesreps/{repId} {
+      // Allow read publicly to verify promo codes, restricts management strictly to Super Admins
+      allow get, list: if true;
+      allow create: if isValidId(repId) && isSuperAdmin();
+      allow update: if isValidId(repId) && isSuperAdmin();
+      allow delete: if isValidId(repId) && isSuperAdmin();
+    }
+
     match /orders/{orderId} {
       allow get: if isValidId(orderId) && isSalesman() && isStoreUser(existing().get('storeId', null));
       allow list: if isSalesman() && isStoreUser(resource.data.storeId);

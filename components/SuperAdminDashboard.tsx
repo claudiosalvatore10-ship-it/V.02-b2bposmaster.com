@@ -10,7 +10,7 @@ import { GoogleGenAI } from "@google/genai";
 import Papa from 'papaparse';
 import { read, utils, writeFile } from 'xlsx';
 import { LandingCMS } from './LandingCMS';
-import { formatPhoneNumber } from '../utils';
+import { formatPhoneNumber, formatTaxId, formatSsn, numberToWordsSpanish, numberToWordsEnglish } from '../utils';
 
 interface SuperAdminDashboardProps {
   onLogout: () => void;
@@ -36,7 +36,41 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
   const [globalImages, setGlobalImages] = useState<any[]>([]);
   const [demoRequests, setDemoRequests] = useState<any[]>([]);
   const [merchantRegistrations, setMerchantRegistrations] = useState<MerchantRegistration[]>([]);
+  const [salesReps, setSalesReps] = useState<Salesman[]>([]);
+  const [merchantSubTab, setMerchantSubTab] = useState<'applications' | 'salesreps'>('applications');
+  const [isAddingSalesRep, setIsAddingSalesRep] = useState(false);
+  const [editingSalesRep, setEditingSalesRep] = useState<Salesman | null>(null);
+  const [newSalesRepData, setNewSalesRepData] = useState({
+    nombre: '',
+    apellido: '',
+    codigo: '',
+    email: '',
+    telefono: '',
+    direccion: '',
+    ciudad: '',
+    estado: '',
+    cp: '',
+    taxId: '',
+    activo: true,
+    posPrice: 350,
+    commissionRate: 150,
+    commissionType: 'fixed' as 'fixed' | 'percentage',
+    ssn: '',
+    taxClassification: '1099' as 'W2' | '1099',
+    settlementFrequency: 'weekly' as 'weekly' | 'biweekly' | 'monthly',
+  });
   const [selectedReg, setSelectedReg] = useState<MerchantRegistration | null>(null);
+  const [settlementRep, setSettlementRep] = useState<Salesman | null>(null);
+  const [overridePosUnits, setOverridePosUnits] = useState<number>(0);
+  const [tempCommRate, setTempCommRate] = useState<number>(150);
+  const [tempCommType, setTempCommType] = useState<'fixed' | 'percentage'>('fixed');
+  const [tempPosPrice, setTempPosPrice] = useState<number>(350);
+  const [customMemo, setCustomMemo] = useState<string>('Liquidación de Comisiones B2B POS Master');
+  const [checkNumber, setCheckNumber] = useState<number>(1045);
+  const [checkDate, setCheckDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [activePreviewTab, setActivePreviewTab] = useState<'check' | 'stub'>('check');
+  const [taxFitRate, setTaxFitRate] = useState<number>(12);
+  const [taxSitRate, setTaxSitRate] = useState<number>(4);
   const [testingReg, setTestingReg] = useState<MerchantRegistration | null>(null);
   const [simTerminal, setSimTerminal] = useState<'Pax A920' | 'Dejavoo QD4' | 'Clover Flex'>('Pax A920');
   const [simAmount, setSimAmount] = useState<string>('150.00');
@@ -1037,6 +1071,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
       setMerchantRegistrations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MerchantRegistration)));
     });
 
+    // Salesmen/Sales Reps for onboarding assignment
+    const unsubSalesmen = onSnapshot(collection(db, 'salesreps'), (snapshot) => {
+      setSalesReps(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Salesman)));
+    });
+
     return () => {
       unsubStores();
       unsubUsers();
@@ -1048,6 +1087,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
       unsubSAInvoices();
       unsubDemoRequests();
       unsubMerchants();
+      unsubSalesmen();
     };
   }, []);
 
@@ -1447,7 +1487,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <>
+      <div className="min-h-screen bg-slate-50 flex flex-col print:hidden">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-3">
@@ -1455,7 +1496,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
             <ShieldCheck className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">PharmaPOS Super Admin</h1>
+            <h1 className="text-xl font-bold text-slate-900">B2B POS Master Super Admin</h1>
             <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">SaaS Management Console</p>
           </div>
         </div>
@@ -1927,114 +1968,1494 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
 
         {activeTab === 'merchants' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Merchant Onboarding Applications</h2>
-                <p className="text-sm text-slate-500 font-medium">Review and process merchant credit card processing applications submitted by sales reps</p>
+                <h2 className="text-lg font-bold text-slate-900">Registro & Onboarding de Comercios</h2>
+                <p className="text-sm text-slate-500 font-medium">Administre las solicitudes de afiliación de tiendas y los asesores/vendedores de calle</p>
+              </div>
+              <div className="flex bg-slate-200/60 p-1 rounded-xl border border-slate-300/40">
+                <button
+                  type="button"
+                  onClick={() => setMerchantSubTab('applications')}
+                  className={`px-4 py-2 text-xs font-black rounded-lg transition-all ${
+                    merchantSubTab === 'applications'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  📝 Solicitudes ({merchantRegistrations.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMerchantSubTab('salesreps')}
+                  className={`px-4 py-2 text-xs font-black rounded-lg transition-all ${
+                    merchantSubTab === 'salesreps'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  💼 Vendedores de Calle ({salesReps.length})
+                </button>
               </div>
             </div>
             
-            <div className="p-4 border-b border-slate-100 flex gap-4 bg-white">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Filter by DBA name, Owner, Sales rep, SSN or Bank routing..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-slate-800 font-medium"
-                />
-              </div>
-            </div>
+            {merchantSubTab === 'applications' && (
+              <>
+                <div className="p-4 border-b border-slate-100 flex gap-4 bg-white">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Filter by DBA name, Owner, Sales rep, SSN or Bank routing..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition text-slate-800 font-medium"
+                    />
+                  </div>
+                </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-slate-100">
-                    <th className="px-6 py-4">Submission Date</th>
-                    <th className="px-6 py-4">Store DBA Name</th>
-                    <th className="px-6 py-4">Legal Name</th>
-                    <th className="px-6 py-4">Owner Name</th>
-                    <th className="px-6 py-4">Sales Rep</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {merchantRegistrations.length === 0 ? (
-                    <tr><td colSpan={7} className="p-8 text-center text-slate-400">No merchant registrations submitted yet.</td></tr>
-                  ) : (
-                    merchantRegistrations
-                      .filter(reg => {
-                        const q = searchQuery.toLowerCase().trim();
-                        if (!q) return true;
-                        return (
-                          reg.busStoreNameDba?.toLowerCase().includes(q) ||
-                          reg.busLegalName?.toLowerCase().includes(q) ||
-                          `${reg.ownerFirstName} ${reg.ownerLastName}`.toLowerCase().includes(q) ||
-                          reg.salesmanName?.toLowerCase().includes(q) ||
-                          reg.ownerSsn?.includes(q) ||
-                          reg.bankRoutingNumber?.includes(q)
-                        );
-                      })
-                      .sort((a, b) => b.createdAt - a.createdAt)
-                      .map((reg) => (
-                        <tr key={reg.id} className="hover:bg-slate-50 transition">
-                          <td className="px-6 py-4 text-sm font-medium text-slate-600">
-                            {new Date(reg.createdAt).toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4 font-bold text-slate-900">{reg.busStoreNameDba}</td>
-                          <td className="px-6 py-4 text-sm text-slate-700 font-medium">{reg.busLegalName}</td>
-                          <td className="px-6 py-4 text-sm text-slate-700 font-medium">
-                            {reg.ownerFirstName} {reg.ownerLastName}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-slate-600 font-medium">
-                            {reg.salesmanName}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-2 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
-                              reg.status === 'approved' 
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : reg.status === 'testing'
-                                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                                  : reg.status === 'rejected'
-                                    ? 'bg-red-50 text-red-700 border border-red-200'
-                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
-                            }`}>
-                              {reg.status || 'pending'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => setSelectedReg(reg)}
-                                className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg transition"
-                              >
-                                Review Details
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  if (confirm('Are you sure you want to delete this application record?')) {
-                                    try {
-                                      await deleteDoc(doc(db, 'merchantRegistrations', reg.id));
-                                      toast.success('Registration deleted successfully');
-                                    } catch (err) {
-                                      toast.error('Failed to delete registration');
-                                    }
-                                  }
-                                }}
-                                className="p-1.5 text-slate-400 hover:text-red-500 transition rounded-lg hover:bg-slate-100"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-slate-100">
+                        <th className="px-6 py-4">Submission Date</th>
+                        <th className="px-6 py-4">Store DBA Name</th>
+                        <th className="px-6 py-4">Legal Name</th>
+                        <th className="px-6 py-4">Owner Name</th>
+                        <th className="px-6 py-4">Sales Rep</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {merchantRegistrations.length === 0 ? (
+                        <tr><td colSpan={7} className="p-8 text-center text-slate-400">No merchant registrations submitted yet.</td></tr>
+                      ) : (
+                        merchantRegistrations
+                          .filter(reg => {
+                            const q = searchQuery.toLowerCase().trim();
+                            if (!q) return true;
+                            return (
+                              reg.busStoreNameDba?.toLowerCase().includes(q) ||
+                              reg.busLegalName?.toLowerCase().includes(q) ||
+                              `${reg.ownerFirstName} ${reg.ownerLastName}`.toLowerCase().includes(q) ||
+                              reg.salesmanName?.toLowerCase().includes(q) ||
+                              reg.ownerSsn?.includes(q) ||
+                              reg.bankRoutingNumber?.includes(q)
+                            );
+                          })
+                          .sort((a, b) => b.createdAt - a.createdAt)
+                          .map((reg) => (
+                            <tr key={reg.id} className="hover:bg-slate-50 transition">
+                              <td className="px-6 py-4 text-sm font-medium text-slate-600">
+                                {new Date(reg.createdAt).toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 font-bold text-slate-900">{reg.busStoreNameDba}</td>
+                              <td className="px-6 py-4 text-sm text-slate-700 font-medium">{reg.busLegalName}</td>
+                              <td className="px-6 py-4 text-sm text-slate-700 font-medium">
+                                {reg.ownerFirstName} {reg.ownerLastName}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-slate-600 font-medium">
+                                {reg.salesmanName}
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={`px-2 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                                  reg.status === 'approved' 
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                }`}>
+                                  {reg.status || 'pending'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => setSelectedReg(reg)}
+                                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg transition"
+                                  >
+                                    Review Details
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (confirm('Are you sure you want to delete this application record?')) {
+                                        try {
+                                          await deleteDoc(doc(db, 'merchantRegistrations', reg.id));
+                                          toast.success('Registration deleted successfully');
+                                        } catch (err) {
+                                          toast.error('Failed to delete registration');
+                                        }
+                                      }
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-red-500 transition rounded-lg hover:bg-slate-100"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {merchantSubTab === 'salesreps' && (
+              <div className="p-6 bg-white space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                  <div className="text-left">
+                    <h3 className="text-base font-black text-slate-900">Agentes / Vendedores de Calle</h3>
+                    <p className="text-xs text-slate-500 font-medium">Crea, edita y da de alta los códigos autorizados que usarán los vendedores para registrar comercios</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingSalesRep(null);
+                      setNewSalesRepData({
+                        nombre: '',
+                        apellido: '',
+                        codigo: 'VEND-' + Math.floor(100 + Math.random() * 900),
+                        email: '',
+                        telefono: '',
+                        direccion: '',
+                        ciudad: '',
+                        estado: '',
+                        cp: '',
+                        taxId: '',
+                        activo: true,
+                        posPrice: 350,
+                        commissionRate: 150,
+                        commissionType: 'fixed',
+                        ssn: '',
+                        taxClassification: '1099',
+                        settlementFrequency: 'weekly'
+                      });
+                      setIsAddingSalesRep(true);
+                    }}
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition flex items-center gap-2 shadow-md shadow-blue-100 self-start sm:self-auto"
+                  >
+                    <Plus className="w-4 h-4" /> Agregar Vendedor de Calle
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border border-slate-150 rounded-xl overflow-hidden">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-500 text-xs font-black uppercase tracking-wider border-b border-slate-150">
+                        <th className="px-6 py-4">Nombre Completo</th>
+                        <th className="px-6 py-4">Código Autorizado</th>
+                        <th className="px-6 py-4">Información de Contacto</th>
+                        <th className="px-6 py-4">Aplicaciones Realizadas</th>
+                        <th className="px-6 py-4">Estado</th>
+                        <th className="px-6 py-4 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm">
+                      {salesReps.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-slate-400 font-medium">
+                            No hay vendedores de calle registrados aún. Haga clic en "+ Agregar Vendedor" para registrar el primero.
                           </td>
                         </tr>
-                      ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                      ) : (
+                        salesReps.map((rep) => {
+                          const applicationsCount = merchantRegistrations.filter(
+                            m => m.salesmanId === rep.id || 
+                            m.customSalesmanCode?.toUpperCase() === rep.codigo?.toUpperCase() ||
+                            m.salesmanName?.toLowerCase().includes((rep.nombre + ' ' + rep.apellido).toLowerCase())
+                          ).length;
+
+                          return (
+                            <tr key={rep.id} className="hover:bg-slate-50/60 transition">
+                              <td className="px-6 py-4 text-left">
+                                <div className="font-bold text-slate-900">{rep.nombre} {rep.apellido}</div>
+                                <div className="flex gap-1.5 mt-1">
+                                  <span className="px-1.5 py-0.5 text-[9px] font-black bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100 uppercase tracking-wider">
+                                    {rep.taxClassification || '1099'}
+                                  </span>
+                                  <span className="px-1.5 py-0.5 text-[9px] font-black bg-slate-50 text-slate-600 rounded-md border border-slate-150 uppercase tracking-wider">
+                                    🕒 {rep.settlementFrequency === 'weekly' ? 'Semanal' : rep.settlementFrequency === 'biweekly' ? 'Quincenal' : rep.settlementFrequency === 'monthly' ? 'Mensual' : 'Semanal'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-left">
+                                <span className="font-mono font-extrabold text-blue-600 bg-blue-50 border border-blue-100 rounded px-2 px-1 text-xs select-all inline-block mb-1">
+                                  {rep.codigo || 'DIRECTO'}
+                                </span>
+                                <div className="text-[10px] text-slate-500 font-bold space-y-0.5">
+                                  <div>Precio POS: <span className="text-slate-800">${rep.posPrice ?? 350}</span></div>
+                                  <div>Comisión: <span className="text-blue-700">{rep.commissionType === 'percentage' ? `${rep.commissionRate ?? 150}%` : `$${rep.commissionRate ?? 150}`}</span></div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-xs text-slate-600 font-medium space-y-1 text-left">
+                                {rep.email && <div>✉ {rep.email}</div>}
+                                {rep.telefono && <div>📞 {rep.telefono}</div>}
+                                {rep.ssn && <div className="text-[10px] text-slate-500 font-bold">SSN: <span className="font-mono text-slate-700 bg-slate-100 px-1 py-0.5 rounded">{rep.ssn}</span></div>}
+                                {rep.taxId && <div className="text-[10px] text-slate-500 font-bold">TAX ID: <span className="font-mono text-slate-700 bg-slate-100 px-1 py-0.5 rounded">{rep.taxId}</span></div>}
+                              </td>
+                              <td className="px-6 py-4 font-extrabold text-slate-800 text-xs">
+                                <span className={`px-2.5 py-1 rounded-full ${
+                                  applicationsCount > 0 
+                                    ? 'bg-emerald-50 text-emerald-700 font-bold border border-emerald-100' 
+                                    : 'bg-slate-50 text-slate-400 border border-slate-100'
+                                }`}>
+                                  {applicationsCount} Solicitudes
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${
+                                  rep.activo !== false 
+                                    ? 'bg-emerald-100 text-emerald-800' 
+                                    : 'bg-red-100 text-red-800'
+                                }`}>
+                                  {rep.activo !== false ? 'Activo' : 'Inactivo'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingSalesRep(rep);
+                                      setNewSalesRepData({
+                                        nombre: rep.nombre || '',
+                                        apellido: rep.apellido || '',
+                                        codigo: rep.codigo || '',
+                                        email: rep.email || '',
+                                        telefono: rep.telefono || '',
+                                        direccion: rep.direccion || '',
+                                        ciudad: rep.ciudad || '',
+                                        estado: rep.estado || '',
+                                        cp: rep.cp || '',
+                                        taxId: rep.taxId || '',
+                                        activo: rep.activo !== false,
+                                        posPrice: rep.posPrice ?? 350,
+                                        commissionRate: rep.commissionRate ?? 150,
+                                        commissionType: rep.commissionType || 'fixed',
+                                        ssn: rep.ssn || '',
+                                        taxClassification: rep.taxClassification || '1099',
+                                        settlementFrequency: rep.settlementFrequency || 'weekly'
+                                      });
+                                      setIsAddingSalesRep(true);
+                                    }}
+                                    className="px-3 py-1.5 bg-slate-50/50 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-lg transition border border-slate-200"
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSettlementRep(rep);
+                                      setOverridePosUnits(applicationsCount);
+                                      setTempPosPrice(rep.posPrice ?? 350);
+                                      setTempCommRate(rep.commissionRate ?? 150);
+                                      setTempCommType(rep.commissionType || 'fixed');
+                                      setCustomMemo(`Comisiones POS - ${rep.nombre} ${rep.apellido}`);
+                                      setCheckDate(new Date().toISOString().split('T')[0]);
+                                    }}
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-lg transition shadow-sm shadow-emerald-100 flex items-center gap-1"
+                                  >
+                                    <DollarSign className="w-3.5 h-3.5" />
+                                    Liquidar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      if (confirm(`¿Está seguro de que desea eliminar al vendedor ${rep.nombre} ${rep.apellido}? Sus códigos ingresados anteriormente podrían dejar de ser válidos para nuevas solicitudes.`)) {
+                                        try {
+                                          await deleteDoc(doc(db, 'salesreps', rep.id));
+                                          toast.success('Vendedor eliminado con éxito de la plataforma.');
+                                        } catch (err) {
+                                          toast.error('No se pudo borrar al vendedor.');
+                                        }
+                                      }
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-red-500 transition rounded-lg hover:bg-slate-100"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Sales Representative Creation / Editing Modal */}
+            {isAddingSalesRep && (
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden flex flex-col text-slate-800">
+                  <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-950 text-left">
+                        {editingSalesRep ? 'Editar Vendedor de Calle' : 'Registrar Vendedor de Calle'}
+                      </h3>
+                      <p className="text-xs text-slate-500 font-medium text-left">Ingrese los datos para autorizar el código del vendedor en el Onboarding de la calle</p>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => setIsAddingSalesRep(false)}
+                      className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl transition"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <form 
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!newSalesRepData.nombre.trim() || !newSalesRepData.apellido.trim() || !newSalesRepData.codigo.trim()) {
+                        toast.error('Nombre, Apellido y Código de Vendedor son campos estrictamente obligatorios.');
+                        return;
+                      }
+
+                      try {
+                        const repId = editingSalesRep?.id ?? `SALES-GLOBAL-${Date.now()}`;
+                        const docData = {
+                          id: repId,
+                          storeId: 'SYSTEM', // Representante global de la plataforma
+                          nombre: newSalesRepData.nombre.trim(),
+                          apellido: newSalesRepData.apellido.trim(),
+                          codigo: newSalesRepData.codigo.trim().toUpperCase(),
+                          email: newSalesRepData.email.trim(),
+                          telefono: newSalesRepData.telefono.trim(),
+                          direccion: newSalesRepData.direccion.trim(),
+                          ciudad: newSalesRepData.ciudad.trim(),
+                          estado: newSalesRepData.estado.trim(),
+                          cp: newSalesRepData.cp.trim(),
+                          taxId: newSalesRepData.taxId.trim(),
+                          activo: newSalesRepData.activo,
+                          pin: '1111',
+                          posPrice: Number(newSalesRepData.posPrice) || 0,
+                          commissionRate: Number(newSalesRepData.commissionRate) || 0,
+                          commissionType: newSalesRepData.commissionType,
+                          ssn: newSalesRepData.ssn,
+                          taxClassification: newSalesRepData.taxClassification,
+                          settlementFrequency: newSalesRepData.settlementFrequency
+                        };
+
+                        await setDoc(doc(db, 'salesreps', repId), sanitizeForFirestore(docData), { merge: true });
+                        toast.success(editingSalesRep ? 'Datos del vendedor actualizados exitosamente.' : '¡Vendedor de Calle registrado y código autorizado con éxito!');
+                        setIsAddingSalesRep(false);
+                      } catch (err) {
+                        toast.error('Error al guardar datos del vendedor.');
+                        console.error(err);
+                      }
+                    }}
+                    className="p-6 space-y-4"
+                  >
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-left">
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Nombre *</label>
+                        <input
+                          type="text"
+                          required
+                          value={newSalesRepData.nombre}
+                          onChange={(e) => setNewSalesRepData(prev => ({ ...prev, nombre: e.target.value }))}
+                          placeholder="Ej: Pedro"
+                          className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div className="text-left">
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Apellido *</label>
+                        <input
+                          type="text"
+                          required
+                          value={newSalesRepData.apellido}
+                          onChange={(e) => setNewSalesRepData(prev => ({ ...prev, apellido: e.target.value }))}
+                          placeholder="Ej: Martínez"
+                          className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="text-left">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Código de Promoción / Vendedor (Debe ser único) *</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          required
+                          value={newSalesRepData.codigo}
+                          onChange={(e) => setNewSalesRepData(prev => ({ ...prev, codigo: e.target.value.toUpperCase() }))}
+                          placeholder="Ej: AGENTE-007"
+                          className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 font-mono tracking-wider font-extrabold text-blue-600 uppercase"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setNewSalesRepData(prev => ({ ...prev, codigo: 'VEND-' + Math.floor(100 + Math.random() * 900) }))}
+                          className="px-3 border border-slate-300 rounded-xl hover:bg-slate-50 text-xs font-bold text-slate-600"
+                        >
+                          Generar
+                        </button>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-medium block mt-1">Este código lo escribirá su vendedor en la página de afiliación para validar su identidad y procesar su comisión.</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-left">
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Email (Opcional)</label>
+                        <input
+                          type="email"
+                          value={newSalesRepData.email}
+                          onChange={(e) => setNewSalesRepData(prev => ({ ...prev, email: e.target.value }))}
+                          placeholder="pedro@suempresa.com"
+                          className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div className="text-left">
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Teléfono (Opcional)</label>
+                        <input
+                          type="text"
+                          value={newSalesRepData.telefono}
+                          onChange={(e) => setNewSalesRepData(prev => ({ ...prev, telefono: formatPhoneNumber(e.target.value) }))}
+                          placeholder="(555) 000-0000"
+                          className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Finanzas y Comisiones */}
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-left space-y-3">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 border-b border-slate-200 pb-1.5 flex items-center gap-1.5">
+                        💳 Finanzas y Comisiones
+                      </h4>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Precio POS ($) *</label>
+                          <input
+                            type="number"
+                            required
+                            min="0"
+                            value={newSalesRepData.posPrice}
+                            onChange={(e) => setNewSalesRepData(prev => ({ ...prev, posPrice: Number(e.target.value) || 0 }))}
+                            className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Comisión *</label>
+                          <input
+                            type="number"
+                            required
+                            min="0"
+                            value={newSalesRepData.commissionRate}
+                            onChange={(e) => setNewSalesRepData(prev => ({ ...prev, commissionRate: Number(e.target.value) || 0 }))}
+                            className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Tipo Comisión *</label>
+                          <select
+                            value={newSalesRepData.commissionType}
+                            onChange={(e) => setNewSalesRepData(prev => ({ ...prev, commissionType: e.target.value as 'fixed' | 'percentage' }))}
+                            className="w-full px-2 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 font-bold"
+                          >
+                            <option value="fixed">Fijo ($ por POS)</option>
+                            <option value="percentage">Porcentaje (% del POS)</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Datos Fiscales y Liquidación */}
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-left space-y-3">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 border-b border-slate-200 pb-1.5 flex items-center gap-1.5">
+                        🏛️ Datos Fiscales y Liquidación
+                      </h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Seguro Social (SSN)</label>
+                          <input
+                            type="text"
+                            value={newSalesRepData.ssn}
+                            onChange={(e) => setNewSalesRepData(prev => ({ ...prev, ssn: formatSsn(e.target.value) }))}
+                            placeholder="000-00-0000"
+                            className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Federal TAX ID / EIN</label>
+                          <input
+                            type="text"
+                            value={newSalesRepData.taxId}
+                            onChange={(e) => setNewSalesRepData(prev => ({ ...prev, taxId: formatTaxId(e.target.value) }))}
+                            placeholder="00-0000000"
+                            className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 font-mono"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Clasificación Fiscal *</label>
+                          <select
+                            value={newSalesRepData.taxClassification}
+                            onChange={(e) => setNewSalesRepData(prev => ({ ...prev, taxClassification: e.target.value as 'W2' | '1099' }))}
+                            className="w-full px-2 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 font-bold"
+                          >
+                            <option value="1099">Contratista (1099)</option>
+                            <option value="W2">Empleado (W2)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Frecuencia Liquidación *</label>
+                          <select
+                            value={newSalesRepData.settlementFrequency}
+                            onChange={(e) => setNewSalesRepData(prev => ({ ...prev, settlementFrequency: e.target.value as 'weekly' | 'biweekly' | 'monthly' }))}
+                            className="w-full px-2 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 font-bold"
+                          >
+                            <option value="weekly">Semanal</option>
+                            <option value="biweekly">Quincenal</option>
+                            <option value="monthly">Mensual</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2 text-left">
+                      <input
+                        type="checkbox"
+                        id="salesrep-activo-toggle"
+                        checked={newSalesRepData.activo}
+                        onChange={(e) => setNewSalesRepData(prev => ({ ...prev, activo: e.target.checked }))}
+                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                      />
+                      <label htmlFor="salesrep-activo-toggle" className="text-xs font-bold text-slate-700 select-none">
+                        Vendedor activo para autorizar y firmar afiliaciones
+                      </label>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingSalesRep(false)}
+                        className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold hover:bg-slate-50 transition"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition"
+                      >
+                        {editingSalesRep ? 'Actualizar' : 'Guardar Autorización'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Modal de Liquidación de Comisiones y Emisión de Cheque */}
+            {settlementRep && (() => {
+              const totalVentasCalculadas = overridePosUnits * tempPosPrice;
+              const comisionCalculada = tempCommType === 'percentage'
+                ? (totalVentasCalculadas * (tempCommRate / 100))
+                : (overridePosUnits * tempCommRate);
+
+              const isW2 = (settlementRep.taxClassification || '1099') === 'W2';
+
+              // Impuestos y deducciones reales de EE. UU. (FICA y retenciones de renta federal/estatal)
+              const fitRateVal = isW2 ? (taxFitRate / 100) : 0;
+              const sitRateVal = isW2 ? (taxSitRate / 100) : 0;
+              const ssRateVal = isW2 ? 0.062 : 0;          // Seguro Social 6.2%
+              const medRateVal = isW2 ? 0.0145 : 0;        // Medicare 1.45%
+              const suiRateVal = isW2 ? 0.005 : 0;         // SUI / SDI estatal 0.5%
+
+              const fitDeduction = comisionCalculada * fitRateVal;
+              const sitDeduction = comisionCalculada * sitRateVal;
+              const ssDeduction = comisionCalculada * ssRateVal;
+              const medicareDeduction = comisionCalculada * medRateVal;
+              const suiDeduction = comisionCalculada * suiRateVal;
+
+              const totalDeductions = fitDeduction + sitDeduction + ssDeduction + medicareDeduction + suiDeduction;
+              const netPay = comisionCalculada - totalDeductions;
+
+              // Estimaciones de Acumulado de Año (YTD) para realismo profesional (ADP style alignment)
+              const ytdMultiplier = 8.5;
+              const ytdGross = comisionCalculada * ytdMultiplier;
+              const ytdFit = fitDeduction * ytdMultiplier;
+              const ytdSit = sitDeduction * ytdMultiplier;
+              const ytdSs = ssDeduction * ytdMultiplier;
+              const ytdMedicare = medicareDeduction * ytdMultiplier;
+              const ytdSui = suiDeduction * ytdMultiplier;
+              const ytdTotalDeductions = totalDeductions * ytdMultiplier;
+              const ytdNetPay = netPay * ytdMultiplier;
+
+              // Rango del período de liquidación
+              const getPeriodDates = () => {
+                try {
+                  const end = new Date(checkDate);
+                  const start = new Date(checkDate);
+                  const freq = settlementRep.settlementFrequency || 'weekly';
+                  const days = freq === 'weekly' ? 7 : freq === 'biweekly' ? 14 : 30;
+                  start.setDate(end.getDate() - days);
+                  return {
+                    start: start.toISOString().split('T')[0],
+                    end: end.toISOString().split('T')[0]
+                  };
+                } catch {
+                  return { start: 'N/A', end: checkDate };
+                }
+              };
+              const period = getPeriodDates();
+
+              return (
+                <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                  {/* CSS de impresión específico para el cheque y talonario US */}
+                  <style>{`
+                    @media print {
+                      body {
+                        visibility: hidden !important;
+                        background: white !important;
+                        color: black !important;
+                      }
+                      #printable-payroll-document, #printable-payroll-document * {
+                        visibility: visible !important;
+                      }
+                      #printable-payroll-document {
+                        position: absolute !important;
+                        left: 0 !important;
+                        top: 0 !important;
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        box-shadow: none !important;
+                        border: none !important;
+                        box-sizing: border-box !important;
+                        display: block !important;
+                      }
+                      @page {
+                        size: letter portrait;
+                        margin: 0.5in !important;
+                      }
+                    }
+                  `}</style>
+
+                  <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col text-slate-800 max-h-[92vh] overflow-y-auto">
+                    
+                    {/* Header */}
+                    <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                      <div className="text-left font-sans">
+                        <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                          💸 Liquidación de Nómina y Emisión de Cheque US
+                        </h3>
+                        <p className="text-xs text-slate-500 font-medium">Calcule la liquidación del comisionista, configure impuestos gubernamentales y emita el cheque junto con su colilla/talonario (pay stub) corporativo oficial.</p>
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => setSettlementRep(null)}
+                        className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl transition"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="p-6 space-y-6">
+                      
+                      {/* Grid de 2 Columnas Principal */}
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        
+                        {/* Columna Izquierda: Calculadora y Ajustes Impositivos (5 cols) */}
+                        <div className="lg:col-span-12 xl:col-span-5 bg-slate-50 p-5 rounded-2xl border border-slate-200/60 text-left space-y-4">
+                          <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider border-b border-slate-250 pb-2 flex items-center gap-1.5 font-sans">
+                            <Briefcase className="w-4 h-4 text-slate-500" /> Perfil y Configuración
+                          </h4>
+
+                          <div className="space-y-3 font-sans">
+                            <div>
+                              <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 block mb-1">Vendedor</span>
+                              <div className="font-bold text-slate-800 text-sm">{settlementRep.nombre} {settlementRep.apellido}</div>
+                              <div className="text-[11px] text-slate-500 font-medium">{settlementRep.email || 'Sin correo electrónico'}</div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/65">
+                              <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm">
+                                <span className="text-[9px] uppercase font-black text-slate-400 block">Estatus Fiscal (W2 / 1099)</span>
+                                <span className={`text-xs font-black px-2 py-0.5 rounded-md inline-block mt-0.5 ${isW2 ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                                  {isW2 ? 'W-2 (Employee)' : '1099 (Contractor)'}
+                                </span>
+                              </div>
+                              <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm">
+                                <span className="text-[9px] uppercase font-black text-slate-400 block">Frecuencia Liquidación</span>
+                                <span className="text-xs font-black text-slate-800 uppercase block mt-1">
+                                  {settlementRep.settlementFrequency === 'weekly' ? 'Semanal' : settlementRep.settlementFrequency === 'biweekly' ? 'Quincenal' : settlementRep.settlementFrequency === 'monthly' ? 'Mensual' : 'Semanal'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* SSN y Tax ID */}
+                            <div className="grid grid-cols-2 gap-2">
+                              {settlementRep.ssn ? (
+                                <div className="bg-white p-2 text-slate-800 rounded-lg border border-slate-200 text-[11px]">
+                                  <span className="text-[9px] uppercase font-bold text-slate-400 block">Social Security (SSN)</span>
+                                  <span className="font-mono font-bold text-slate-800">{settlementRep.ssn}</span>
+                                </div>
+                              ) : (
+                                <div className="bg-rose-50 border border-rose-200 p-2 rounded-lg text-[10px] text-rose-700 font-sans">
+                                  <span className="font-bold block">SSN Requerido para W-2</span>
+                                  <p className="mt-0.5 leading-tight text-[9.5px]">Registre el SSN en su perfil de vendedor.</p>
+                                </div>
+                              )}
+
+                              <div className="bg-white p-2 text-slate-800 rounded-lg border border-slate-200 text-[11px]">
+                                <span className="text-[9px] uppercase font-bold text-slate-400 block">TAX ID / EIN Corporation</span>
+                                <span className="font-mono font-bold text-slate-800">{settlementRep.taxId || 'N/A'}</span>
+                              </div>
+                            </div>
+
+                            <hr className="border-slate-200" />
+
+                            {/* Inputs de comisiones */}
+                            <div className="space-y-3 font-sans">
+                              <h5 className="text-[10px] uppercase font-black text-slate-400 tracking-wider mb-2">Comisiones sobre Ventas POS</h5>
+                              
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-505 uppercase tracking-wider mb-1 font-sans">Unidades POS Vendidas / Activadas</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={overridePosUnits}
+                                  onChange={(e) => setOverridePosUnits(Math.max(0, parseInt(e.target.value) || 0))}
+                                  className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-black text-slate-800"
+                                />
+                                <span className="text-[9px] text-slate-400 block mt-0.5 font-sans font-medium">Ventas aprobadas registradas con el código {settlementRep.codigo || 'DIRECTO'}.</span>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-2 font-sans">
+                                <div className="col-span-1">
+                                  <label className="block text-[10px] font-bold text-slate-500 mb-1">Precio Unitario ($)</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={tempPosPrice}
+                                    onChange={(e) => setTempPosPrice(Math.max(0, parseFloat(e.target.value) || 0))}
+                                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg text-slate-800 font-bold"
+                                  />
+                                </div>
+                                <div className="col-span-1">
+                                  <label className="block text-[10px] font-bold text-slate-500 mb-1">Ratio Comisión</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={tempCommRate}
+                                    onChange={(e) => setTempCommRate(Math.max(0, parseFloat(e.target.value) || 0))}
+                                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg text-blue-700 font-black font-sans"
+                                  />
+                                </div>
+                                <div className="col-span-1">
+                                  <label className="block text-[10px] font-bold text-slate-500 mb-1 font-sans">Modo Ratio</label>
+                                  <select
+                                    value={tempCommType}
+                                    onChange={(e) => setTempCommType(e.target.value as 'fixed' | 'percentage')}
+                                    className="w-full px-1.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg text-slate-700 font-bold"
+                                  >
+                                    <option value="fixed">Fijo ($/POS)</option>
+                                    <option value="percentage">Porcentaje (%)</option>
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Panel Fiscal W-2 */}
+                            {isW2 ? (
+                              <div className="bg-indigo-50/50 border border-indigo-100 p-3.5 rounded-xl space-y-3 mt-4 font-sans">
+                                <h5 className="text-[10px] uppercase font-black text-indigo-800 tracking-wider flex items-center gap-1 font-sans">
+                                  🏢 Retenciones Federales & Estatales (W-2 Only)
+                                </h5>
+                                <p className="text-[10px] text-indigo-600 font-medium leading-tight font-sans">Deducciones fiscales oficiales. El super admin puede alterar los porcentajes para coincidir con las regulaciones estatales.</p>
+                                
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="block text-[9px] font-bold text-indigo-700 uppercase mb-0.5">Impuesto Federal (FIT %)</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="40"
+                                      value={taxFitRate}
+                                      onChange={(e) => setTaxFitRate(Math.max(0, parseFloat(e.target.value) || 0))}
+                                      className="w-full px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-indigo-900"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[9px] font-bold text-indigo-700 uppercase mb-0.5">Impuesto Estatal (SIT %)</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="20"
+                                      value={taxSitRate}
+                                      onChange={(e) => setTaxSitRate(Math.max(0, parseFloat(e.target.value) || 0))}
+                                      className="w-full px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-indigo-900"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="bg-white/75 border border-indigo-100 p-2 rounded-lg text-[10px] space-y-1 text-indigo-900 font-mono">
+                                  <div className="flex justify-between font-medium">
+                                    <span className="font-sans">Federal Tax (FIT):</span>
+                                    <span className="font-bold">${fitDeduction.toFixed(2)} ({taxFitRate}%)</span>
+                                  </div>
+                                  <div className="flex justify-between font-medium">
+                                    <span className="font-sans">State Tax (SIT):</span>
+                                    <span className="font-bold">${sitDeduction.toFixed(2)} ({taxSitRate}%)</span>
+                                  </div>
+                                  <div className="flex justify-between font-medium">
+                                    <span className="font-sans">Social Security (FICA):</span>
+                                    <span className="font-medium">${ssDeduction.toFixed(2)} (6.2%)</span>
+                                  </div>
+                                  <div className="flex justify-between font-medium">
+                                    <span className="font-sans font-sans">Medicare (FICA):</span>
+                                    <span className="font-medium">${medicareDeduction.toFixed(2)} (1.45%)</span>
+                                  </div>
+                                  <div className="flex justify-between font-medium">
+                                    <span className="font-sans">Disability / SUI:</span>
+                                    <span className="font-bold">${suiDeduction.toFixed(2)} (0.5%)</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="bg-amber-50/50 border border-amber-200/50 p-3.5 rounded-xl space-y-2 text-amber-900 text-[11px] font-medium leading-relaxed font-sans mt-4">
+                                <span className="font-black text-amber-800 uppercase text-[9px] block tracking-wide">⚠️ Régimen 1099 Contractor</span>
+                                <p className="mb-1 text-slate-605 text-slate-600 font-sans font-medium text-left">Este comisionista actúa como contratista independiente. Su pago bruto no congrega retenciones de seguros federales (FICA), desempleo o renta.</p>
+                                <span className="text-[10px] text-amber-700 font-bold bg-white/70 py-1 px-2 rounded border border-amber-100 flex items-center justify-between">
+                                  <span>Impuestos Retenidos:</span>
+                                  <span>$0.00 (Exento)</span>
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Resumen Final del Cálculo Financiero */}
+                            <div className="bg-slate-100 p-3.5 rounded-xl border border-slate-200 space-y-2 font-sans font-semibold">
+                              <div className="flex justify-between text-[11px] text-slate-500">
+                                <span>Ganancia Bruta (Gross Pay):</span>
+                                <span className="font-mono text-slate-800 font-black">${comisionCalculada.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              </div>
+                              {isW2 && (
+                                <div className="flex justify-between text-[11px] text-rose-500 font-sans">
+                                  <span>Total Deducciones:</span>
+                                  <span className="font-mono text-rose-600 font-black">-${totalDeductions.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between text-xs border-t border-slate-200 pt-2 font-black font-sans">
+                                <span>Net Pay (Valor del Cheque):</span>
+                                <span className="font-mono text-emerald-700 text-sm font-black">${netPay.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              </div>
+                            </div>
+
+                          </div>
+                        </div>
+
+                        {/* Columna Derecha: Vista del Cheque / Config Voucher (7 cols) */}
+                        <div className="lg:col-span-12 xl:col-span-7 flex flex-col space-y-4 text-left">
+                          
+                          {/* Datos del Cheque a Generar */}
+                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/50 flex flex-wrap gap-4 font-sans">
+                            <div className="flex-1 min-w-[120px]">
+                              <label className="block text-[10px] font-extrabold text-slate-505 text-slate-500 uppercase mb-1">Número de Cheque</label>
+                              <input
+                                type="number"
+                                value={checkNumber}
+                                onChange={(e) => setCheckNumber(parseInt(e.target.value) || 1001)}
+                                className="w-full px-3 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold"
+                              />
+                            </div>
+                            <div className="flex-1 min-w-[120px]">
+                              <label className="block text-[10px] font-extrabold text-slate-505 text-slate-500 uppercase mb-1">Fecha Emisión</label>
+                              <input
+                                type="date"
+                                value={checkDate}
+                                onChange={(e) => setCheckDate(e.target.value)}
+                                className="w-full px-3 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold"
+                              />
+                            </div>
+                            <div className="w-full">
+                              <label className="block text-[10px] font-extrabold text-slate-550 mr-1 text-slate-500 uppercase mb-1">Descripción / Memo del Cheque</label>
+                              <input
+                                type="text"
+                                value={customMemo}
+                                onChange={(e) => setCustomMemo(e.target.value)}
+                                placeholder="Ej: Liquidación comisiones correspondientes a semana 24"
+                                className="w-full px-3 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Selector de Pestañas de Vista Previa */}
+                          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/50 font-sans">
+                            <button
+                              type="button"
+                              onClick={() => setActivePreviewTab('check')}
+                              className={`flex-1 py-1.5 text-center text-[11px] font-bold uppercase tracking-wider rounded-lg transition ${
+                                activePreviewTab === 'check'
+                                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                                  : 'text-slate-500 hover:text-slate-800'
+                              }`}
+                            >
+                              💵 Vista de Cheque
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActivePreviewTab('stub')}
+                              className={`flex-1 py-1.5 text-center text-[11px] font-bold uppercase tracking-wider rounded-lg transition relative ${
+                                activePreviewTab === 'stub'
+                                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                                  : 'text-slate-500 hover:text-slate-800'
+                              }`}
+                            >
+                              📄 Colilla de Nómina US (Pay Stub) {isW2 && <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>}
+                            </button>
+                          </div>
+
+                          {/* CONTENEDOR FÍSICO DEL CHEQUE */}
+                          <div 
+                            id="printable-check-area"
+                            className="w-full aspect-[2.1/1] border-2 border-slate-300 bg-[#fafcf7] rounded-2xl shadow-xl p-5 md:p-6 flex flex-col justify-between relative overflow-hidden select-none border-dashed border-slate-400"
+                            style={{
+                              backgroundImage: "radial-gradient(#e5edd7 0.75px, transparent 0.75px), radial-gradient(#e5edd7 0.75px, #fafcf7 0.75px)",
+                              backgroundSize: "20px 20px",
+                              backgroundPosition: "0 0, 10px 10px"
+                            }}
+                          >
+                            {/* Vista en pantalla interactiva según la pestaña activa */}
+                            {activePreviewTab === 'check' ? (
+                              <>
+                                {/* Líneas Decorativas de Seguridad y Fondo */}
+                                <div className="absolute inset-0 border border-slate-300/40 m-2.5 rounded-lg pointer-events-none md:m-3"></div>
+
+                                {/* Fila 1: Cabecera Corporativa y Check Number */}
+                                <div className="flex justify-between items-start z-10">
+                                  <div className="text-left mt-1 ml-1 font-sans">
+                                    <h2 className="text-xs font-black text-slate-900 tracking-wide uppercase">B2B POS MASTER CORP.</h2>
+                                    <p className="text-[8px] text-slate-500 font-bold leading-tight uppercase">Corporate Sales Clearance</p>
+                                    <p className="text-[8px] text-slate-400 font-medium">100 Wall Street, New York, NY 10005</p>
+                                  </div>
+                                  
+                                  <div className="text-right mt-1 mr-1 font-serif font-black text-slate-800 text-xs md:text-sm">
+                                    No. <span className="text-sm md:text-base tracking-wider font-extrabold">{checkNumber}</span>
+                                  </div>
+                                </div>
+
+                                {/* Fila 2: Fecha y Cuadro de Monto Numérico */}
+                                <div className="flex justify-between items-center z-10 px-1 mt-1 font-sans">
+                                  <div className="text-left flex items-center gap-1.5 font-sans">
+                                    <span className="text-[9px] font-serif italic text-slate-500">Date:</span>
+                                    <span className="font-mono text-xs md:text-sm font-extrabold border-b border-slate-400 px-3 tracking-widest text-slate-800">
+                                      {checkDate}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 bg-white border border-slate-405 px-2.5 py-1.5 rounded-md shadow-inner">
+                                    <span className="font-serif italic font-bold text-xs text-slate-400">$</span>
+                                    <span className="font-mono text-xs md:text-sm font-black tracking-tight text-slate-900 select-all">
+                                      {netPay.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Fila 3: Payee line */}
+                                <div className="flex items-end gap-1.5 z-10 px-1 font-sans">
+                                  <span className="text-[8px] uppercase font-black tracking-wider text-slate-500 whitespace-nowrap leading-none select-none italic font-serif">Pay to the Order of:</span>
+                                  <div className="flex-1 border-b border-dotted border-slate-400 pb-0.5 text-left font-serif font-black text-xs md:text-sm tracking-wide text-slate-900 px-2 uppercase italic leading-none">
+                                    {settlementRep.nombre} {settlementRep.apellido}
+                                  </div>
+                                </div>
+
+                                {/* Fila 4: Spelled out check value */}
+                                <div className="flex items-end gap-1.5 z-10 px-1 font-sans">
+                                  <div className="flex-1 border-b border-dotted border-slate-400 pb-0.5 text-left font-serif text-[9px] md:text-xs font-black text-slate-800 uppercase italic px-1 leading-none">
+                                    {numberToWordsEnglish(netPay)} DOLLARS
+                                  </div>
+                                </div>
+
+                                {/* Fila 5: MEMO & FIRMA */}
+                                <div className="flex justify-between items-end gap-6 z-10 px-1 pb-1 font-sans">
+                                  <div className="flex-1 flex items-end gap-1 text-left min-w-0 font-sans">
+                                    <span className="text-[9px] italic font-serif text-slate-500 leading-none">Memo:</span>
+                                    <div className="flex-1 border-b border-slate-300 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[9px] font-medium text-slate-600 px-1 uppercase">
+                                      {customMemo}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="w-1/3 text-center pb-0 pl-4 relative shrink-0">
+                                    <div className="font-serif italic font-extrabold text-[10px] text-blue-700 mb-0.5 absolute bottom-4 left-1/2 -translate-x-1/2 rotate-[-4deg] z-0 select-none opacity-85 pointer-events-none">
+                                      B2B POS Master Admin
+                                    </div>
+                                    <div className="border-t border-slate-400 w-full pt-1 text-[7px] uppercase tracking-widest font-black text-slate-400 font-sans z-10 relative">
+                                      Authorized Signature
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Fila 6: Banda MICR */}
+                                <div className="w-full text-center font-mono font-bold tracking-widest text-[#152e0c] select-all select-none pt-0 bg-[#fbfdf7]/40 z-10 text-[9px] md:text-xs">
+                                  ⑆021000021⑆ 0244670267⑈ {checkNumber}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="hidden">
+                                {/* En pantalla, el talonario se renderiza fuera de este contenedor de aspecto fijo, para evitar deformaciones */}
+                              </div>
+                            )}
+
+                          </div>
+
+                          {/* Renderizado de la Colilla (Pay Stub) interactiva solo en modo 'stub' */}
+                          {activePreviewTab === 'stub' && (
+                            <div className="w-full border border-slate-200 rounded-xl bg-white p-5 space-y-4 shadow-xl text-xs font-sans text-slate-800 animate-fadeIn">
+                              {/* Cabecera Empleador / Empleado */}
+                              <div className="grid grid-cols-2 gap-4 pb-3 border-b border-slate-200">
+                                <div>
+                                  <span className="text-[10px] uppercase font-black text-slate-400 block mb-0.5 font-bold">Employer / Empleador</span>
+                                  <span className="font-black text-slate-800 block text-xs">B2B POS MASTER CORP.</span>
+                                  <span className="text-[10px] text-slate-500 block leading-tight">100 Wall Street, New York, NY 10005</span>
+                                </div>
+                                <div className="font-sans">
+                                  <span className="text-[10px] uppercase font-black text-slate-400 block mb-0.5 font-bold font-sans">Employee / Vendedor</span>
+                                  <span className="font-black text-slate-800 block text-xs">{settlementRep.nombre} {settlementRep.apellido}</span>
+                                  <span className="text-[10px] text-slate-500 block leading-tight">Tipo: {isW2 ? 'W-2 Regular Employee' : '1099 Contractor'}</span>
+                                  <span className="font-mono text-[10px] text-indigo-700 font-bold block mt-0.5">SSN/Tax ID: {settlementRep.ssn || settlementRep.taxId || 'XXX-XX-XXXX'}</span>
+                                </div>
+                              </div>
+
+                              {/* Tiempos y Períodos */}
+                              <div className="grid grid-cols-4 gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center font-semibold text-[10px]">
+                                <div>
+                                  <span className="text-[9px] text-slate-400 block uppercase font-bold">Pay Period Start</span>
+                                  <span className="font-mono text-slate-700">{period.start}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-slate-400 block uppercase font-bold">Pay Period End</span>
+                                  <span className="font-mono text-slate-700">{period.end}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-slate-400 block uppercase font-bold">Check / Pay Date</span>
+                                  <span className="font-mono text-slate-700">{checkDate}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-slate-400 block uppercase font-bold">Check Number</span>
+                                  <span className="font-mono text-slate-700">#{checkNumber}</span>
+                                </div>
+                              </div>
+
+                              {/* Tabla de Ganancias */}
+                              <div className="space-y-1">
+                                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block mb-1">Detailed Gross Earnings / Ingresos Brutos</span>
+                                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                  <table className="w-full text-left text-xs bg-white">
+                                    <thead>
+                                      <tr className="bg-slate-50 text-[10px] font-black uppercase text-slate-500 border-b border-slate-200">
+                                        <th className="p-2">Description</th>
+                                        <th className="p-2 text-center">Units (Qty)</th>
+                                        <th className="p-2 text-right">Rate / Commission</th>
+                                        <th className="p-2 text-right font-sans">Current gross</th>
+                                        <th className="p-2 text-right">YTD Gross</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      <tr className="border-b border-slate-100 font-medium font-sans">
+                                        <td className="p-2 font-bold text-slate-800">Comisiones de POS Vendidos</td>
+                                        <td className="p-2 text-center font-mono font-bold">{overridePosUnits} u</td>
+                                        <td className="p-2 text-right font-mono text-slate-600">
+                                          {tempCommType === 'percentage' ? `${tempCommRate}%` : `$${tempCommRate.toFixed(2)}/u`}
+                                        </td>
+                                        <td className="p-2 text-right font-mono font-bold text-slate-800">${comisionCalculada.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td className="p-2 text-right font-mono text-slate-500">${ytdGross.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                      </tr>
+                                      <tr className="bg-slate-50/50 font-black border-t border-slate-200">
+                                        <td className="p-2 uppercase text-[10px] text-slate-500 font-sans font-bold">Total Earnings</td>
+                                        <td className="p-2 text-center font-mono text-slate-500 font-bold">{overridePosUnits} u</td>
+                                        <td className="p-2 text-right font-mono font-sans">-</td>
+                                        <td className="p-2 text-right font-mono text-slate-900">${comisionCalculada.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td className="p-2 text-right font-mono text-slate-600">${ytdGross.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+
+                              {/* Tabla de Deducciones Fiscales */}
+                              <div className="space-y-1 font-sans">
+                                <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block mb-1">Deductions and Tax Withholdings / Retenciones e Impuestos</span>
+                                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                  <table className="w-full text-left text-xs text-slate-800 font-sans bg-white">
+                                    <thead>
+                                      <tr className="bg-slate-50 text-[10px] font-black uppercase text-slate-500 border-b border-slate-200">
+                                        <th className="p-2">Description</th>
+                                        <th className="p-2 text-center">IRS Reference</th>
+                                        <th className="p-2 text-right">Applicable %</th>
+                                        <th className="p-2 text-right">Current Period</th>
+                                        <th className="p-2 text-right">YTD Cumulative</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {isW2 ? (
+                                        <>
+                                          <tr className="border-b border-slate-100 font-medium font-sans">
+                                            <td className="p-2 font-bold text-slate-800">FIT - Federal Income Tax</td>
+                                            <td className="p-2 text-center text-slate-500">IRS Section 3402</td>
+                                            <td className="p-2 text-right font-bold text-indigo-700">{taxFitRate}%</td>
+                                            <td className="p-2 text-right text-rose-600 font-bold">-${fitDeduction.toFixed(2)}</td>
+                                            <td className="p-2 text-right text-slate-505">-${ytdFit.toFixed(2)}</td>
+                                          </tr>
+                                          <tr className="border-b border-slate-100 font-medium font-sans">
+                                            <td className="p-2 font-bold text-slate-800">SIT - State Income Tax</td>
+                                            <td className="p-2 text-center text-slate-500">State Revenue Code</td>
+                                            <td className="p-2 text-right font-bold text-indigo-700">{taxSitRate}%</td>
+                                            <td className="p-2 text-right text-rose-600 font-bold">-${sitDeduction.toFixed(2)}</td>
+                                            <td className="p-2 text-right text-slate-505">-${ytdSit.toFixed(2)}</td>
+                                          </tr>
+                                          <tr className="border-b border-slate-100 font-medium font-sans">
+                                            <td className="p-2 font-bold text-slate-800">FICA Social Security</td>
+                                            <td className="p-2 text-center text-slate-500">OASDI Act</td>
+                                            <td className="p-2 text-right">6.20%</td>
+                                            <td className="p-2 text-right text-rose-600">-${ssDeduction.toFixed(2)}</td>
+                                            <td className="p-2 text-right text-slate-505">-${ytdSs.toFixed(2)}</td>
+                                          </tr>
+                                          <tr className="border-b border-slate-100 font-medium font-sans">
+                                            <td className="p-2 font-sans font-bold text-slate-800">FICA Medicare</td>
+                                            <td className="p-2 text-center text-slate-500">Hospital Ins.</td>
+                                            <td className="p-2 text-right">1.45%</td>
+                                            <td className="p-2 text-right text-rose-600">-${medicareDeduction.toFixed(2)}</td>
+                                            <td className="p-2 text-right text-slate-505">-${ytdMedicare.toFixed(2)}</td>
+                                          </tr>
+                                          <tr className="border-b border-slate-100 font-medium font-sans">
+                                            <td className="p-2 font-bold text-slate-800">Disability / SUI SDI</td>
+                                            <td className="p-2 text-center text-slate-500">SUI Unemployment</td>
+                                            <td className="p-2 text-right">0.50%</td>
+                                            <td className="p-2 text-right text-rose-600">-${suiDeduction.toFixed(2)}</td>
+                                            <td className="p-2 text-right text-slate-505">-${ytdSui.toFixed(2)}</td>
+                                          </tr>
+                                          <tr className="bg-slate-50/50 font-black border-t border-slate-205">
+                                            <td className="p-2 uppercase text-[10px] text-slate-500 font-bold font-sans">Total Deductions</td>
+                                            <td className="p-2 text-center text-slate-500 font-sans">Withholding Sum</td>
+                                            <td className="p-2 text-right">15.85%</td>
+                                            <td className="p-2 text-right font-mono text-rose-600 font-bold">-${totalDeductions.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            <td className="p-2 text-right font-mono text-slate-600">-${ytdTotalDeductions.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                          </tr>
+                                        </>
+                                      ) : (
+                                        <tr className="font-medium text-slate-500 font-sans">
+                                          <td colSpan={5} className="p-6 text-center italic bg-slate-50 font-sans">
+                                            Este comisionista es Contractor 1099 independiente. No aplica retenciones de taxes o seguros federales/estatales.
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+
+                              {/* Resumen Inferior ADP */}
+                              <div className="grid grid-cols-3 gap-4 border-t-2 border-slate-300 border-double pt-4 text-center font-black">
+                                <div className="bg-slate-50 p-2 rounded-lg border border-slate-205">
+                                  <span className="text-[10px] text-slate-400 block uppercase font-sans">Gross commissions</span>
+                                  <span className="font-mono text-slate-800 text-sm">${comisionCalculada.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                  <span className="font-mono text-[9px] text-slate-400 block mt-1">YTD Gross: ${ytdGross.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="bg-slate-50 p-2 rounded-lg border border-slate-205 col-span-1">
+                                  <span className="text-[10px] text-slate-400 block uppercase">Taxes Withheld</span>
+                                  <span className="font-mono text-rose-600 text-sm">-${totalDeductions.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                  <span className="font-mono text-[9px] text-slate-400 block mt-1">YTD Taxes: ${ytdTotalDeductions.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="bg-emerald-50/50 p-2 rounded-lg border border-emerald-100 font-sans">
+                                  <span className="text-[10px] text-emerald-800 block uppercase">Net pays value</span>
+                                  <span className="font-mono text-emerald-700 text-base font-black">${netPay.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                  <span className="font-mono text-[9px] text-emerald-600 block mt-1 leading-none font-sans">YTD Net: ${ytdNetPay.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                              </div>
+
+                            </div>
+                          )}
+
+                        </div>
+
+                        {/* ========================================================= */}
+                        {/* ELEMENTO IMPRIMIBLE OFICIAL (Stack vertical: Check + Stub) */}
+                        {/* ========================================================= */}
+                        <div id="printable-payroll-document" className="hidden print:block font-sans p-2 text-black bg-white w-full max-w-4xl mx-auto space-y-6">
+                          
+                          {/* PARTE DE ARRIBA: EL CHEQUE BANCARIO */}
+                          <div className="w-full aspect-[2.1/1] border border-black bg-white p-6 flex flex-col justify-between relative overflow-hidden box-border font-sans">
+                            
+                            <div className="absolute inset-0 border border-slate-300 m-2 rounded pointer-events-none"></div>
+
+                            <div className="flex justify-between items-start">
+                              <div className="text-left font-sans">
+                                <h2 className="text-sm font-black text-slate-900 tracking-wide uppercase">B2B POS MASTER CORP.</h2>
+                                <p className="text-[9px] text-slate-500 font-bold leading-tight uppercase">Corporate Sales Clearance</p>
+                                <p className="text-[8px] text-slate-400 font-medium">100 Wall Street, New York, NY 10005</p>
+                              </div>
+                              <div className="text-right font-serif font-black text-slate-800 text-sm">
+                                No. <span className="text-lg tracking-wider font-extrabold">{checkNumber}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-center px-1 mt-1">
+                              <div className="text-left flex items-center gap-1.5 font-sans">
+                                <span className="text-[10px] font-serif italic text-slate-500 font-bold">Date:</span>
+                                <span className="font-mono text-xs font-extrabold border-b border-black px-4 tracking-widest text-black">
+                                  {checkDate}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 bg-white border border-black px-3 py-1 rounded">
+                                <span className="font-serif italic font-bold text-xs">$</span>
+                                <span className="font-mono text-sm font-black text-black">
+                                  {netPay.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-end gap-1.5 px-1 font-sans">
+                              <span className="text-[9px] uppercase font-black tracking-wider text-slate-500 whitespace-nowrap leading-none italic font-serif">Pay to the Order of:</span>
+                              <div className="flex-1 border-b border-dashed border-black pb-0.5 text-left font-serif font-black text-sm tracking-wide text-black px-2 uppercase italic leading-none">
+                                {settlementRep.nombre} {settlementRep.apellido}
+                              </div>
+                            </div>
+
+                            <div className="flex items-end gap-1.5 px-1 font-sans font-serif">
+                              <div className="flex-1 border-b border-dashed border-black pb-0.5 text-left font-serif text-[10px] md:text-sm font-black text-black uppercase italic px-1 leading-none select-all font-serif">
+                                {numberToWordsEnglish(netPay)} DOLLARS
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-end gap-6 px-1 pb-1 font-sans">
+                              <div className="flex-1 flex items-end gap-1 text-left min-w-0 font-sans">
+                                <span className="text-[10px] italic font-serif text-slate-500 leading-none">Memo:</span>
+                                <div className="flex-1 border-b border-black overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[9px] font-medium text-slate-650 px-1 uppercase leading-none font-mono">
+                                  {customMemo}
+                                </div>
+                              </div>
+                              <div className="w-1/3 text-center pb-0 pl-4 relative shrink-0">
+                                <div className="font-serif italic font-extrabold text-[10px] text-slate-800 mb-0.5 absolute bottom-4 left-1/2 -translate-x-1/2 rotate-[-4deg] z-0 select-none opacity-85 pointer-events-none font-serif">
+                                  B2B POS Master Admin
+                                </div>
+                                <div className="border-t border-black w-full pt-1 text-[7px] uppercase tracking-widest font-black text-slate-400 font-sans z-10 relative">
+                                  Authorized Signature
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="w-full text-center font-mono font-bold tracking-widest text-slate-900 pt-0 z-10 text-[10px]">
+                              ⑆021000021⑆ 0244670267⑈ {checkNumber}
+                            </div>
+                          </div>
+
+                          {/* LÍNEA DE CORTE EN IMPRESIÓN */}
+                          <div className="w-full border-t border-dashed border-slate-400 relative my-4 block print:block">
+                            <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-white px-3 font-mono text-[8px] uppercase tracking-wider text-slate-400 font-bold border border-slate-200 rounded">
+                              ✂️ DETACH BEFORE DEPOSITING AND RETAIN AS STATEMENT
+                            </span>
+                          </div>
+
+                          {/* PARTE DE ABAJO: EL TALONARIO OFICIAL COMPLIANT DE EE. UU. (EARNINGS STATEMENT) */}
+                          <div className="w-full border border-slate-300 bg-white p-5 space-y-3 rounded-lg text-[10px] leading-snug">
+                            
+                            {/* Encabezado lateral */}
+                            <div className="grid grid-cols-2 gap-4 pb-2 border-b border-slate-300">
+                              <div className="font-sans">
+                                <span className="text-[8px] uppercase font-bold text-slate-500 block mb-0.5 font-bold">Employer Address</span>
+                                <span className="font-black text-slate-900 block text-xs">B2B POS MASTER CORP.</span>
+                                <span className="text-[9px] text-slate-500 block leading-tight">100 Wall Street, New York, NY 10005</span>
+                              </div>
+                              <div className="text-right font-sans">
+                                <span className="text-[8px] uppercase font-bold text-slate-505 text-slate-500 block mb-0.5 font-bold">Earnings Statement / Pay Stub</span>
+                                <span className="font-black text-slate-900 block text-xs uppercase leading-none font-sans">{settlementRep.nombre} {settlementRep.apellido}</span>
+                                <span className="text-[9px] text-slate-500 block leading-tight mt-1">Estatus: {isW2 ? 'W-2 Regular Employee' : '1099 Contractor'}</span>
+                                <span className="font-mono text-[9px] text-indigo-700 font-bold block mt-0.5">SSN/Tax ID: {settlementRep.ssn || settlementRep.taxId || 'XXX-XX-XXXX'}</span>
+                              </div>
+                            </div>
+
+                            {/* ADP Payroll details */}
+                            <div className="grid grid-cols-4 gap-2 bg-slate-50 p-2 rounded border border-slate-200 text-center text-[9px] font-bold">
+                              <div>
+                                <span className="text-[8px] text-slate-400 block uppercase mb-0.5">Period Start</span>
+                                <span className="font-mono text-slate-800">{period.start}</span>
+                              </div>
+                              <div>
+                                <span className="text-[8px] text-slate-400 block uppercase mb-0.5">Period End</span>
+                                <span className="font-mono text-slate-800">{period.end}</span>
+                              </div>
+                              <div>
+                                <span className="text-[8px] text-slate-400 block uppercase mb-0.5">Pay Date</span>
+                                <span className="font-mono text-slate-800">{checkDate}</span>
+                              </div>
+                              <div>
+                                <span className="text-[8px] text-slate-400 block uppercase mb-0.5">No. Cheque</span>
+                                <span className="font-mono text-slate-800">#{checkNumber}</span>
+                              </div>
+                            </div>
+
+                            {/* Tabla de ganancias */}
+                            <div className="space-y-1">
+                              <span className="text-[8px] uppercase font-black text-slate-500 tracking-wider block font-bold">EARNINGS / INGRESOS DETALLADOS</span>
+                              <div className="border border-slate-300 rounded overflow-hidden">
+                                <table className="w-full text-left text-[10px] bg-white">
+                                  <thead>
+                                    <tr className="bg-slate-50 text-[8px] font-bold uppercase text-slate-500 border-b border-slate-300">
+                                      <th className="p-1.5">Description</th>
+                                      <th className="p-1.5 text-center">Amount (POS u)</th>
+                                      <th className="p-1.5 text-right">Commission Rate</th>
+                                      <th className="p-1.5 text-right">Current Gross</th>
+                                      <th className="p-1.5 text-right font-sans">YTD Gross</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    <tr className="border-b border-slate-200">
+                                      <td className="p-1.5 font-bold">POS Terminal Sales Commission</td>
+                                      <td className="p-1.5 text-center font-mono font-bold">{overridePosUnits} u</td>
+                                      <td className="p-1.5 text-right font-mono text-slate-600">
+                                        {tempCommType === 'percentage' ? `${tempCommRate}%` : `$${tempCommRate.toFixed(2)}`}
+                                      </td>
+                                      <td className="p-1.5 text-right font-mono font-bold text-slate-800">${comisionCalculada.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                      <td className="p-1.5 text-right font-mono text-slate-500">${ytdGross.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    </tr>
+                                    <tr className="bg-slate-50/50 font-bold border-t border-slate-200">
+                                      <td className="p-1.5 uppercase text-[8px] text-slate-500">Gross Salaries / Earning totals</td>
+                                      <td className="p-1.5 text-center font-mono text-slate-500">{overridePosUnits} u</td>
+                                      <td className="p-1.5 text-right font-mono">-</td>
+                                      <td className="p-1.5 text-right font-mono text-slate-900">${comisionCalculada.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                      <td className="p-1.5 text-right font-mono text-slate-500">${ytdGross.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+
+                            {/* Tabla de deductions */}
+                            <div className="space-y-1 font-sans">
+                              <span className="text-[8px] uppercase font-black text-slate-500 tracking-wider block font-bold font-sans">TAX AND DEDUCTIONS WITHHOLDINGS / RETENCIONES E IMPUESTOS EE.UU.</span>
+                              <div className="border border-slate-300 rounded overflow-hidden">
+                                <table className="w-full text-left text-[10px] bg-white">
+                                  <thead>
+                                    <tr className="bg-slate-50 text-[8px] font-bold uppercase text-slate-500 border-b border-slate-300 font-sans">
+                                      <th className="p-1.5 font-sans whitespace-nowrap">Description</th>
+                                      <th className="p-1.5 text-center font-sans">IRS Reference</th>
+                                      <th className="p-1.5 text-right font-sans">Applicable %</th>
+                                      <th className="p-1.5 text-right font-sans">Current Period</th>
+                                      <th className="p-1.5 text-right font-sans">YTD Cumulative</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {isW2 ? (
+                                      <>
+                                        <tr className="border-b border-slate-200 font-sans">
+                                          <td className="p-1.5 font-sans font-bold">FIT - Federal Income Tax</td>
+                                          <td className="p-1.5 text-center text-slate-500">IRS Section 3402</td>
+                                          <td className="p-1.5 text-right font-mono">{taxFitRate}%</td>
+                                          <td className="p-1.5 text-right font-mono text-rose-700">-${fitDeduction.toFixed(2)}</td>
+                                          <td className="p-1.5 text-right font-mono text-slate-505">-${ytdFit.toFixed(2)}</td>
+                                        </tr>
+                                        <tr className="border-b border-slate-200 font-sans">
+                                          <td className="p-1.5 font-sans font-bold animate-pulse">SIT - State Income Tax</td>
+                                          <td className="p-1.5 text-center text-slate-500 font-sans">State Code</td>
+                                          <td className="p-1.5 text-right font-mono">{taxSitRate}%</td>
+                                          <td className="p-1.5 text-right font-mono text-rose-700">-${sitDeduction.toFixed(2)}</td>
+                                          <td className="p-1.5 text-right font-mono text-slate-505">-${ytdSit.toFixed(2)}</td>
+                                        </tr>
+                                        <tr className="border-b border-slate-200 font-sans">
+                                          <td className="p-1.5 font-sans font-bold">FICA Social Security Retentions</td>
+                                          <td className="p-1.5 text-center text-slate-505 text-slate-500">OASDI Act</td>
+                                          <td className="p-1.5 text-right font-mono">6.20%</td>
+                                          <td className="p-1.5 text-right font-mono text-rose-700">-${ssDeduction.toFixed(2)}</td>
+                                          <td className="p-1.5 text-right font-mono text-slate-505">-${ytdSs.toFixed(2)}</td>
+                                        </tr>
+                                        <tr className="border-b border-slate-200 font-sans">
+                                          <td className="p-1.5 font-sans font-bold">FICA Medicare Retentions</td>
+                                          <td className="p-1.5 text-center text-slate-500">Hospital Ins.</td>
+                                          <td className="p-1.5 text-right font-mono">1.45%</td>
+                                          <td className="p-1.5 text-right font-mono text-rose-700">-${medicareDeduction.toFixed(2)}</td>
+                                          <td className="p-1.5 text-right font-mono text-slate-505">-${ytdMedicare.toFixed(2)}</td>
+                                        </tr>
+                                        <tr className="border-b border-slate-200 font-sans">
+                                          <td className="p-1.5 font-sans font-bold">SUI Disability / SDI Unemployment</td>
+                                          <td className="p-1.5 text-center text-slate-500">State SUI Tax</td>
+                                          <td className="p-1.5 text-right font-mono">0.50%</td>
+                                          <td className="p-1.5 text-right font-mono text-rose-700">-${suiDeduction.toFixed(2)}</td>
+                                          <td className="p-1.5 text-right font-mono text-slate-555 text-slate-500">-${ytdSui.toFixed(2)}</td>
+                                        </tr>
+                                        <tr className="bg-slate-50/50 font-bold border-t border-slate-300">
+                                          <td className="p-1.5 uppercase text-[8px] text-slate-500 font-bold">Total Print Withholdings</td>
+                                          <td className="p-1.5 text-center text-slate-500">Withholding Sum</td>
+                                          <td className="p-1.5 text-right">15.85%</td>
+                                          <td className="p-1.5 text-right font-mono text-rose-700">-${totalDeductions.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                          <td className="p-1.5 text-right font-mono text-slate-500">-${ytdTotalDeductions.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        </tr>
+                                      </>
+                                    ) : (
+                                      <tr>
+                                        <td colSpan={5} className="p-4 text-center italic text-slate-500 bg-slate-50 font-sans">
+                                          Independent Contractor 1099. No tax deductions withheld by the employer company.
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+
+                            {/* Resumen de totales */}
+                            <div className="grid grid-cols-3 gap-2 border-t-2 border-slate-300 border-double pt-3 text-center font-bold">
+                              <div className="bg-slate-50 p-1.5 rounded border border-slate-200 font-sans">
+                                <span className="text-[8px] text-slate-400 block uppercase leading-none mb-1">Gross Payment</span>
+                                <span className="font-mono text-[10px] text-slate-800">${comisionCalculada.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <p className="font-mono text-[8px] text-slate-400 block mt-0.5 leading-none">YTD Gross: ${ytdGross.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                              </div>
+                              <div className="bg-slate-50 p-1.5 rounded border border-slate-200 font-sans">
+                                <span className="text-[8px] text-slate-400 block uppercase leading-none mb-1">Total taxes withheld</span>
+                                <span className="font-mono text-[10px] text-rose-700">-${totalDeductions.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <p className="font-mono text-[8px] text-slate-400 block mt-0.5 leading-none">YTD Taxes: ${ytdTotalDeductions.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                              </div>
+                              <div className="bg-slate-100 p-1.5 rounded border border-slate-200 font-sans">
+                                <span className="text-[8px] text-slate-500 block uppercase leading-none mb-1">Net Pay Received value</span>
+                                <span className="font-mono text-[10px] text-emerald-700 font-extrabold">${netPay.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <p className="font-mono text-[8px] text-emerald-600 block mt-0.5 leading-none">YTD Net Pay: ${ytdNetPay.toLocaleString('es-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                              </div>
+                            </div>
+
+                            <div className="text-center text-[7px] text-slate-400 pt-1 border-t border-slate-200 font-sans">
+                              THIS IS A PROFESSIONAL US GOVERNMENT-COMPLIANT STATEMENT OF EARNINGS. RETAIN THIS FOR YOUR TAX FILING RECORDS.
+                            </div>
+
+                          </div>
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                    {/* Footer */}
+                    <div className="p-6 border-t border-slate-100 flex justify-between items-center bg-slate-50">
+                      <div className="text-left font-sans">
+                        <span className="text-[10px] font-extrabold text-slate-400 uppercase font-mono block">Instrucción de Impresión de Nómina</span>
+                        <span className="text-[11px] text-slate-500 font-medium">Al pulsar "Imprimir Cheque con Talonario", el navegador aislará la página para imprimir tanto el Cheque como la Colilla de Nómina US (Pay Stub) alineados profesionalmente.</span>
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setSettlementRep(null)}
+                          className="px-4 py-2 border border-slate-300 bg-white rounded-xl text-xs font-bold hover:bg-slate-50 transition"
+                        >
+                          Cerrar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => window.print()}
+                          className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition flex items-center gap-2 shadow-md shadow-emerald-100"
+                        >
+                          🖨️ Imprimir Cheque con Talonario
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Application Detail Overlaid Modal */}
             {selectedReg && (
@@ -4425,5 +5846,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
       </main>
 
     </div>
+    </>
   );
 };
