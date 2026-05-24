@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { 
   Save, RefreshCw, Sparkles, Image, Layout, HelpCircle, FileText, Check, AlignLeft,
   Zap, Shield, BarChart3, Globe, Smartphone, Clock, Monitor, ShoppingCart, ChefHat, Layers, Grid,
-  Upload
+  Upload, ArrowUp, ArrowDown, Trash2
 } from 'lucide-react';
 
 const presetImages = [
@@ -41,6 +41,11 @@ interface LandingPageData {
   contactItems: string[];
   contactFormTitle: string;
   contactFormSubtitle: string;
+  
+  // New features for screenshots carousel & demo video
+  heroMode?: 'single' | 'carousel' | 'video';
+  heroCarouselImages?: string[];
+  heroVideoUrl?: string;
 }
 
 const DEFAULT_LANDING_DATA: LandingPageData = {
@@ -64,7 +69,14 @@ const DEFAULT_LANDING_DATA: LandingPageData = {
   contactSubtitle: 'Cuentanos sobre tu negocio y nuestro equipo configurará un entorno dedicado y optimizado para tus volúmenes de operación.',
   contactItems: ['Mapeo de requerimientos', 'Setup de catálogos', 'Capacitación del equipo', 'Soporte VIP'],
   contactFormTitle: 'Instancia Enterprise Personalizada',
-  contactFormSubtitle: 'Contacta a ventas para diseñar un entorno alineado a tu infraestructura comercial.'
+  contactFormSubtitle: 'Contacta a ventas para diseñar un entorno alineado a tu infraestructura comercial.',
+  heroMode: 'single',
+  heroCarouselImages: [
+    'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&q=80&w=1000',
+    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=1000',
+    'https://images.unsplash.com/photo-1556742044-3c52d6e88c62?auto=format&fit=crop&q=80&w=1000'
+  ],
+  heroVideoUrl: 'https://player.vimeo.com/external/371433846.sd.mp4?s=236da2f3c054273b1e2ca49622c349887756f7ef&profile_id=165&oauth2_token_id=57447761'
 };
 
 export const LandingCMS: React.FC = () => {
@@ -73,6 +85,74 @@ export const LandingCMS: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<LandingPageData>(DEFAULT_LANDING_DATA);
   const [dragActive, setDragActive] = useState(false);
+
+  const processCarouselFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('El archivo debe ser una imagen (JPG, PNG, WebP...)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1000;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+          setConfig(prev => {
+            const currentImgs = prev.heroCarouselImages || [];
+            return {
+              ...prev,
+              heroCarouselImages: [...currentImgs, dataUrl]
+            };
+          });
+          toast.success('¡Foto de carrusel procesada y agregada con éxito!');
+        }
+      };
+      img.onerror = () => {
+        toast.error('Error al procesar la imagen.');
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const processVideoFile = (file: File) => {
+    if (!file.type.startsWith('video/')) {
+      toast.error('El archivo debe ser un video (MP4)');
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      toast.warning('El video supera los 25MB recomendados. Los videos más livianos cargan mucho más rápido.');
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setConfig(prev => ({
+        ...prev,
+        heroVideoUrl: event.target?.result as string
+      }));
+      toast.success('¡Video MP4 importado con éxito!');
+    };
+    reader.onerror = () => {
+      toast.error('Error al subir el video.');
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -159,7 +239,10 @@ export const LandingCMS: React.FC = () => {
           contactSubtitle: data.contactSubtitle || DEFAULT_LANDING_DATA.contactSubtitle,
           contactItems: data.contactItems || DEFAULT_LANDING_DATA.contactItems,
           contactFormTitle: data.contactFormTitle || DEFAULT_LANDING_DATA.contactFormTitle,
-          contactFormSubtitle: data.contactFormSubtitle || DEFAULT_LANDING_DATA.contactFormSubtitle
+          contactFormSubtitle: data.contactFormSubtitle || DEFAULT_LANDING_DATA.contactFormSubtitle,
+          heroMode: data.heroMode || DEFAULT_LANDING_DATA.heroMode,
+          heroCarouselImages: data.heroCarouselImages || DEFAULT_LANDING_DATA.heroCarouselImages,
+          heroVideoUrl: data.heroVideoUrl || DEFAULT_LANDING_DATA.heroVideoUrl
         });
       }
       setLoading(false);
@@ -320,90 +403,358 @@ export const LandingCMS: React.FC = () => {
                   />
                 </div>
 
-                <div className="border-t border-gray-100 pt-6">
+                 {/* HERO CONTENT MODE SELECTOR */}
+                <div className="border-t border-gray-200 pt-6 mb-2">
                   <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                    <Image className="w-4 h-4 text-blue-600" />
-                    Foto / Imagen de Portada del Héroe
+                    <Layers className="w-4 h-4 text-blue-600" />
+                    Formato de Presentación Principal (Héroe)
                   </label>
-
-                  {/* Drag and Drop Zone */}
-                  <div 
-                    onDragEnter={handleDrag}
-                    onDragOver={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDrop={handleDrop}
-                    className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all bg-gray-50/50 mb-4 cursor-pointer relative ${
-                      dragActive 
-                        ? 'border-blue-500 bg-blue-50/30 ring-2 ring-blue-100' 
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <input 
-                      type="file" 
-                      id="hero-image-upload"
-                      accept="image/*"
-                      onChange={handleChangeFile}
-                      className="hidden" 
-                    />
-                    <label 
-                      htmlFor="hero-image-upload" 
-                      className="cursor-pointer flex flex-col items-center justify-center space-y-3"
+                  <div className="grid grid-cols-3 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setConfig({ ...config, heroMode: 'single' })}
+                      className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-1.5 ${
+                        (!config.heroMode || config.heroMode === 'single')
+                          ? 'border-blue-600 bg-blue-50/50 text-blue-700 shadow-sm ring-2 ring-blue-100'
+                          : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                      }`}
                     >
-                      <div className="w-12 h-12 bg-blue-100/70 text-blue-600 rounded-full flex items-center justify-center border border-blue-200">
-                        <Upload className="w-5 h-5" />
-                      </div>
-                      <div className="flex flex-col items-center space-y-2">
-                        <p className="text-sm font-semibold text-gray-400">Arrastra tu foto de portada aquí, o</p>
-                        <span className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm hover:shadow-md cursor-pointer">
-                          <Upload className="w-4 h-4" /> Importar Foto desde mi PC
-                        </span>
-                        <p className="text-[10px] text-gray-400 font-medium pt-1">Formatos permitidos: PNG, JPG, JPEG, WEBP. Se optimizará automáticamente.</p>
-                      </div>
+                      <Image className="w-5 h-5 text-current" />
+                      <span className="text-xs font-extrabold">Imagen Única</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setConfig({ ...config, heroMode: 'carousel' })}
+                      className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-1.5 ${
+                        config.heroMode === 'carousel'
+                          ? 'border-blue-600 bg-blue-50/50 text-blue-700 shadow-sm ring-2 ring-blue-100'
+                          : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                      }`}
+                    >
+                      <Layers className="w-5 h-5 text-current" />
+                      <span className="text-xs font-extrabold">Carrusel de Fotos</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setConfig({ ...config, heroMode: 'video' })}
+                      className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-1.5 ${
+                        config.heroMode === 'video'
+                          ? 'border-blue-600 bg-blue-50/50 text-blue-700 shadow-sm ring-2 ring-blue-100'
+                          : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                      }`}
+                    >
+                      <Monitor className="w-5 h-5 text-current" />
+                      <span className="text-xs font-extrabold">Video / Demo</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* MODE 1: SINGLE IMAGE */}
+                {(!config.heroMode || config.heroMode === 'single') && (
+                  <div className="space-y-4 border-t border-gray-100 pt-6">
+                    <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                      <Image className="w-4 h-4 text-blue-600" />
+                      Foto / Imagen de Portada del Héroe (Imagen Única)
                     </label>
 
-                    {/* Quick Preview inside dropzone if custom image is set */}
-                    {config.heroImage && (
-                      <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-center gap-4">
-                        <div className="relative w-20 h-12 rounded-lg border border-gray-200 overflow-hidden bg-white shadow-sm flex-shrink-0">
-                          <img src={config.heroImage} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    {/* Drag and Drop Zone */}
+                    <div 
+                      onDragEnter={handleDrag}
+                      onDragOver={handleDrag}
+                      onDragLeave={handleDrag}
+                      onDrop={handleDrop}
+                      className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all bg-gray-50/50 mb-4 cursor-pointer relative ${
+                        dragActive 
+                          ? 'border-blue-500 bg-blue-50/30 ring-2 ring-blue-100' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <input 
+                        type="file" 
+                        id="hero-image-upload"
+                        accept="image/*"
+                        onChange={handleChangeFile}
+                        className="hidden" 
+                      />
+                      <label 
+                        htmlFor="hero-image-upload" 
+                        className="cursor-pointer flex flex-col items-center justify-center space-y-3"
+                      >
+                        <div className="w-12 h-12 bg-blue-100/70 text-blue-600 rounded-full flex items-center justify-center border border-blue-200">
+                          <Upload className="w-5 h-5" />
                         </div>
-                        <div className="text-left">
-                          <p className="text-[11px] font-bold text-gray-800">Imagen actual de la portada</p>
-                          <p className="text-[9px] text-gray-400 font-semibold truncate max-w-sm">
-                            {config.heroImage.startsWith('data:') ? 'Imagen cargada desde tu dispositivo (Optimizada)' : config.heroImage}
+                        <div className="flex flex-col items-center space-y-2">
+                          <p className="text-sm font-semibold text-gray-400">Arrastra tu foto de portada aquí, o</p>
+                          <span className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm hover:shadow-md cursor-pointer">
+                            <Upload className="w-4 h-4" /> Importar Foto desde mi PC
+                          </span>
+                          <p className="text-[10px] text-gray-400 font-medium pt-1">Formatos permitidos: PNG, JPG, JPEG, WEBP. Se optimizará automáticamente.</p>
+                        </div>
+                      </label>
+
+                      {/* Quick Preview */}
+                      {config.heroImage && (
+                        <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-center gap-4">
+                          <div className="relative w-20 h-12 rounded-lg border border-gray-200 overflow-hidden bg-white shadow-sm flex-shrink-0">
+                            <img src={config.heroImage} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          </div>
+                          <div className="text-left">
+                            <p className="text-[11px] font-bold text-gray-800">Imagen actual de la portada</p>
+                            <p className="text-[9px] text-gray-400 font-semibold truncate max-w-sm">
+                              {config.heroImage.startsWith('data:') ? 'Imagen cargada desde tu dispositivo (Optimizada)' : config.heroImage}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-2">O pega una dirección URL (HTTPS) de imagen:</label>
+                      <input 
+                        type="url" 
+                        value={config.heroImage?.startsWith('data:') ? '' : config.heroImage}
+                        onChange={e => setConfig({ ...config, heroImage: e.target.value })}
+                        className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono text-xs text-gray-500 mb-4"
+                        placeholder="https://images.unsplash.com/photo-..."
+                      />
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <p className="text-xs font-bold text-gray-500">O haz clic para aplicar una de nuestras fotos preconfiguradas:</p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {presetImages.map((img) => (
+                          <div 
+                            key={img.url}
+                            onClick={() => setConfig({ ...config, heroImage: img.url })}
+                            className={`cursor-pointer group flex flex-col rounded-xl overflow-hidden border-2 transition-all ${config.heroImage === img.url ? 'border-blue-600 ring-2 ring-blue-100 bg-blue-50/50' : 'border-gray-100 bg-white hover:border-gray-200'}`}
+                          >
+                            <img src={img.url} alt={img.name} className="h-20 object-cover w-full opacity-80 group-hover:opacity-100 transition" referrerPolicy="no-referrer" />
+                            <div className="p-2 text-[10px] font-bold text-gray-600 text-center truncate">{img.name}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* MODE 2: PHOTO CAROUSEL */}
+                {config.heroMode === 'carousel' && (
+                  <div className="space-y-4 border-t border-gray-100 pt-6">
+                    <div className="flex items-center justify-between pb-2">
+                      <label className="block text-xs font-black text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                        <Layers className="w-4 h-4 text-blue-600" />
+                        Fotos del Carrusel (Capturas de POS, Restaurantes, etc.)
+                      </label>
+                      <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md font-bold">
+                        {(config.heroCarouselImages || []).length} Fotos
+                      </span>
+                    </div>
+
+                    {/* Carousel uploader zone */}
+                    <div className="border-2 border-dashed border-gray-200 rounded-2xl p-6 bg-gray-50/30 text-center hover:border-blue-400 transition cursor-pointer relative">
+                      <input 
+                        type="file" 
+                        id="carousel-photo-upload"
+                        accept="image/*"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            processCarouselFile(e.target.files[0]);
+                          }
+                        }}
+                        className="hidden" 
+                      />
+                      <label htmlFor="carousel-photo-upload" className="cursor-pointer flex flex-col items-center justify-center space-y-2">
+                        <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center shadow-sm">
+                          <Upload className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500">Haz clic aquí para <span className="text-blue-600 hover:underline">Importar Foto POS desde tu Equipo</span></p>
+                          <p className="text-[9px] text-gray-400 font-medium">Sube capturas de pantalla de tu POS para restaurantes o tiendas.</p>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* URL Input to add image */}
+                    <div className="flex gap-2">
+                      <input 
+                        type="url" 
+                        id="carousel-url-adder"
+                        placeholder="Pegar dirección URL HTTPS de otra foto para el carrusel..."
+                        className="flex-1 bg-gray-50 px-4 py-2 text-xs rounded-xl border border-gray-200 outline-none"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const input = document.getElementById('carousel-url-adder') as HTMLInputElement;
+                          if (input && input.value.trim()) {
+                            const val = input.value.trim();
+                            const current = config.heroCarouselImages || [];
+                            setConfig({ ...config, heroCarouselImages: [...current, val] });
+                            input.value = '';
+                            toast.success('¡Foto web añadida al carrusel!');
+                          } else {
+                            toast.error('Ingresa una dirección URL válida');
+                          }
+                        }}
+                        className="px-4 py-2 bg-slate-900 border text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-sm"
+                      >
+                        Añadir
+                      </button>
+                    </div>
+
+                    {/* Image items manager */}
+                    <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                      {(!config.heroCarouselImages || config.heroCarouselImages.length === 0) ? (
+                        <div className="text-center py-8 bg-gray-50/50 rounded-2xl border border-gray-100 text-gray-400 text-xs font-medium">
+                          No tienes fotos en el carrusel de capturas todavía. ¡Sube tu primera screenshot!
+                        </div>
+                      ) : (
+                        config.heroCarouselImages.map((img, index) => (
+                          <div key={index} className="flex items-center justify-between p-3 bg-white rounded-2xl border border-gray-150 shadow-sm gap-4 hover:border-gray-300 transition">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="text-[10px] font-black font-mono text-gray-400 bg-gray-100 rounded-md w-6 h-6 flex items-center justify-center flex-shrink-0">
+                                {index + 1}
+                              </span>
+                              <div className="w-16 h-10 rounded-lg overflow-hidden border border-gray-100 bg-slate-50 flex-shrink-0 relative">
+                                <img src={img} alt={`Slide ${index}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              </div>
+                              <span className="text-[10px] font-medium text-gray-400 truncate max-w-[180px] md:max-w-[280px]">
+                                {img.startsWith('data:') ? 'Imagen Local de mi Equipo (Optimizado)' : img}
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button 
+                                type="button"
+                                disabled={index === 0}
+                                onClick={() => {
+                                  const list = [...(config.heroCarouselImages || [])];
+                                  const temp = list[index];
+                                  list[index] = list[index - 1];
+                                  list[index - 1] = temp;
+                                  setConfig({ ...config, heroCarouselImages: list });
+                                }}
+                                className="p-1 px-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 text-gray-500 disabled:opacity-30 transition"
+                                title="Subir orden"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button 
+                                type="button"
+                                disabled={index === config.heroCarouselImages.length - 1}
+                                onClick={() => {
+                                  const list = [...(config.heroCarouselImages || [])];
+                                  const temp = list[index];
+                                  list[index] = list[index + 1];
+                                  list[index + 1] = temp;
+                                  setConfig({ ...config, heroCarouselImages: list });
+                                }}
+                                className="p-1 px-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 text-gray-500 disabled:opacity-30 transition"
+                                title="Bajar orden"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  const list = (config.heroCarouselImages || []).filter((_, i) => i !== index);
+                                  setConfig({ ...config, heroCarouselImages: list });
+                                  toast.info('Foto eliminada del carrusel');
+                                }}
+                                className="p-1 px-1.5 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 text-red-600 transition"
+                                title="Eliminar de la galería"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* MODE 3: MP4 DEMO VIDEO */}
+                {config.heroMode === 'video' && (
+                  <div className="space-y-4 border-t border-gray-100 pt-6">
+                    <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Monitor className="w-4 h-4 text-blue-600" />
+                      Video MP4 de Demostración del POS
+                    </label>
+
+                    {/* Drag and Drop Video Zone */}
+                    <div className="border-2 border-dashed border-gray-200 rounded-2xl p-6 bg-gray-50/40 text-center hover:border-blue-400 transition cursor-pointer relative">
+                      <input 
+                        type="file" 
+                        id="hero-video-upload"
+                        accept="video/mp4, video/*"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            processVideoFile(e.target.files[0]);
+                          }
+                        }}
+                        className="hidden" 
+                      />
+                      <label htmlFor="hero-video-upload" className="cursor-pointer flex flex-col items-center justify-center space-y-2">
+                        <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center shadow-sm">
+                          <Upload className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-gray-505">Haz clic aquí para <span className="text-blue-600 hover:underline">Importar Video MP4 desde tu PC</span></p>
+                          <p className="text-[9px] text-gray-400 font-medium">Agrega un clip de video (menor de 20MB) de tu software de restaurante en funcionamiento.</p>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-2">O si lo prefieres, pega un enlace directo de video (MP4):</label>
+                      <input 
+                        type="url" 
+                        value={config.heroVideoUrl?.startsWith('data:') ? '' : config.heroVideoUrl}
+                        onChange={e => setConfig({ ...config, heroVideoUrl: e.target.value })}
+                        className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 outline-none font-mono text-xs text-gray-500 mb-2"
+                        placeholder="https://mi-servidor.com/demo-pos.mp4"
+                      />
+                      <p className="text-[10px] text-gray-400 font-semibold leading-relaxed">
+                        Tip: Puedes usar una URL directa de archivo MP4. Los navegadores la reproducirán de inmediato con silenciamiento automático (autoplay loop muted).
+                      </p>
+                    </div>
+
+                    {/* Video player preview block */}
+                    {config.heroVideoUrl && (
+                      <div className="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between pb-1">
+                          <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest flex items-center gap-1">
+                            <span className="w-2 h-2 bg-green-500 rounded-full animate-ping"></span>
+                            Previsualización en Vivo de la Demo
                           </p>
+                          <button 
+                            type="button" 
+                            onClick={() => setConfig({ ...config, heroVideoUrl: '' })}
+                            className="text-slate-400 hover:text-white transition text-[10px] font-bold"
+                          >
+                            Quitar Video
+                          </button>
                         </div>
+                        <video 
+                          key={config.heroVideoUrl}
+                          src={config.heroVideoUrl} 
+                          autoPlay 
+                          loop 
+                          muted 
+                          playsInline 
+                          controls
+                          className="w-full rounded-xl overflow-hidden aspect-video border border-slate-700 bg-black max-h-[220px]"
+                        />
+                        <p className="text-[9px] text-slate-500 truncate text-left mt-1">
+                          Fuente del video: {config.heroVideoUrl.startsWith('data:') ? 'Archivo MP4 Cargado Localmente' : config.heroVideoUrl}
+                        </p>
                       </div>
                     )}
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-2">O si lo prefieres, pega una dirección URL (HTTPS) de imagen:</label>
-                    <input 
-                      type="url" 
-                      value={config.heroImage?.startsWith('data:') ? '' : config.heroImage}
-                      onChange={e => setConfig({ ...config, heroImage: e.target.value })}
-                      className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono text-xs text-gray-500 mb-4"
-                      placeholder="https://images.unsplash.com/photo-..."
-                    />
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <p className="text-xs font-bold text-gray-500">O haz clic para aplicar una de nuestras fotos preconfiguradas:</p>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {presetImages.map((img) => (
-                        <div 
-                          key={img.url}
-                          onClick={() => setConfig({ ...config, heroImage: img.url })}
-                          className={`cursor-pointer group flex flex-col rounded-xl overflow-hidden border-2 transition-all ${config.heroImage === img.url ? 'border-blue-600 ring-2 ring-blue-100 bg-blue-50/50' : 'border-gray-100 bg-white hover:border-gray-200'}`}
-                        >
-                          <img src={img.url} alt={img.name} className="h-20 object-cover w-full opacity-80 group-hover:opacity-100 transition" referrerPolicy="no-referrer" />
-                          <div className="p-2 text-[10px] font-bold text-gray-600 text-center truncate">{img.name}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-100 pt-6">
                   <div>

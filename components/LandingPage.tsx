@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Monitor, ShoppingCart, BarChart3, Smartphone, Zap, Shield, 
-  ChefHat, Layers, Globe, Clock, CheckCircle2, ArrowRight, RefreshCw, Grid
+  ChefHat, Layers, Globe, Clock, CheckCircle2, ArrowRight, RefreshCw, Grid,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { addDoc, collection, serverTimestamp, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -41,6 +42,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   
   const [showQuickTrialModal, setShowQuickTrialModal] = useState(false);
+  const [currentSlide, setCurrentSlide] = useState(0);
 
   const [landingConfig, setLandingConfig] = useState({
     heroBadge: 'Enterprise Distribution Network v.01',
@@ -63,7 +65,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
     contactSubtitle: 'Cuentanos sobre tu negocio y nuestro equipo configurará un entorno dedicado y optimizado para tus volúmenes de operación.',
     contactItems: ['Mapeo de requerimientos', 'Setup de catálogos', 'Capacitación del equipo', 'Soporte VIP'],
     contactFormTitle: 'Instancia Enterprise Personalizada',
-    contactFormSubtitle: 'Contacta a ventas para diseñar un entorno alineado a tu infraestructura comercial.'
+    contactFormSubtitle: 'Contacta a ventas para diseñar un entorno alineado a tu infraestructura comercial.',
+    heroMode: 'single' as 'single' | 'carousel' | 'video',
+    heroCarouselImages: [] as string[],
+    heroVideoUrl: ''
   });
 
   useEffect(() => {
@@ -74,12 +79,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
           ...prev,
           ...data,
           features: data.features || prev.features,
-          contactItems: data.contactItems || prev.contactItems
+          contactItems: data.contactItems || prev.contactItems,
+          heroMode: data.heroMode || 'single',
+          heroCarouselImages: data.heroCarouselImages || [],
+          heroVideoUrl: data.heroVideoUrl || ''
         }));
       }
     });
     return () => unsub();
   }, []);
+
+  // Autoplay intervals for screenshots carousel
+  useEffect(() => {
+    if (landingConfig.heroMode !== 'carousel') return;
+    const slides = landingConfig.heroCarouselImages || [];
+    if (slides.length <= 1) return;
+
+    const interval = setInterval(() => {
+      setCurrentSlide(prev => (prev + 1) % slides.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [landingConfig.heroMode, landingConfig.heroCarouselImages]);
 
   const toggleNecesidad = (req: string) => {
     setNecesidades(prev => prev.includes(req) ? prev.filter(r => r !== req) : [...prev, req]);
@@ -168,9 +188,94 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onDemoSignup }) => {
               </div>
             </motion.div>
           </div>
-          <div className="flex-1 relative">
+          <div className="flex-1 relative w-full">
             <div className="absolute inset-0 bg-gradient-to-tr from-blue-100 to-indigo-50 rounded-[3rem] transform rotate-3 scale-105 -z-10 blur-3xl opacity-50"></div>
-            <img src={landingConfig.heroImage} alt="POS System" className="rounded-[2rem] shadow-2xl border-4 border-white transform -rotate-2 hover:rotate-0 transition duration-500 max-h-[480px] w-full object-cover" referrerPolicy="no-referrer" />
+            
+            {/* 1. SINGLE IMAGE MODE */}
+            {(!landingConfig.heroMode || landingConfig.heroMode === 'single') && (
+              <img 
+                src={landingConfig.heroImage} 
+                alt="POS System" 
+                className="rounded-[2rem] shadow-2xl border-4 border-white transform -rotate-2 hover:rotate-0 transition duration-500 max-h-[480px] w-full object-cover" 
+                referrerPolicy="no-referrer" 
+              />
+            )}
+
+            {/* 2. PHOTO CAROUSEL MODE */}
+            {landingConfig.heroMode === 'carousel' && (
+              <div className="relative rounded-[2rem] shadow-2xl border-4 border-white overflow-hidden bg-slate-100 max-h-[480px] aspect-[4/3] flex items-center justify-center group transition duration-500">
+                {landingConfig.heroCarouselImages && landingConfig.heroCarouselImages.length > 0 ? (
+                  <>
+                    <img 
+                      key={currentSlide}
+                      src={landingConfig.heroCarouselImages[currentSlide]} 
+                      alt={`Visualización POS ${currentSlide + 1}`} 
+                      className="w-full h-full object-cover transition-all duration-700" 
+                      referrerPolicy="no-referrer" 
+                    />
+                    
+                    {/* Navigation controllers */}
+                    {landingConfig.heroCarouselImages.length > 1 && (
+                      <>
+                        <button 
+                          type="button"
+                          onClick={() => setCurrentSlide(prev => (prev - 1 + landingConfig.heroCarouselImages.length) % landingConfig.heroCarouselImages.length)}
+                          className="absolute left-4 w-9 h-9 bg-white/95 hover:bg-white text-slate-800 rounded-full flex items-center justify-center shadow-lg transition opacity-0 group-hover:opacity-100 cursor-pointer"
+                        >
+                          <ChevronLeft className="w-5 h-5 font-bold" />
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => setCurrentSlide(prev => (prev + 1) % landingConfig.heroCarouselImages.length)}
+                          className="absolute right-4 w-9 h-9 bg-white/95 hover:bg-white text-slate-800 rounded-full flex items-center justify-center shadow-lg transition opacity-0 group-hover:opacity-100 cursor-pointer"
+                        >
+                          <ChevronRight className="w-5 h-5 font-bold" />
+                        </button>
+
+                        {/* Pagination indicators */}
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 bg-black/35 backdrop-blur-xs p-1.5 rounded-full z-10 transition">
+                          {landingConfig.heroCarouselImages.map((_, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setCurrentSlide(i)}
+                              className={`w-1.5 h-1.5 rounded-full transition-all ${currentSlide === i ? 'bg-white w-3' : 'bg-white/50 hover:bg-white/85'}`}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="p-8 text-center text-slate-400">
+                    <Monitor className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                    <p className="text-xs font-bold">No hay slides en tu carrusel todavía</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 3. DEMO MP4 VIDEO MODE */}
+            {landingConfig.heroMode === 'video' && (
+              <div className="relative rounded-[2rem] shadow-2xl border-4 border-white overflow-hidden bg-slate-900 max-h-[480px] aspect-[16/10] flex items-center justify-center">
+                {landingConfig.heroVideoUrl ? (
+                  <video 
+                    key={landingConfig.heroVideoUrl}
+                    src={landingConfig.heroVideoUrl} 
+                    autoPlay 
+                    loop 
+                    muted 
+                    playsInline 
+                    className="w-full h-full object-cover" 
+                  />
+                ) : (
+                  <div className="p-8 text-center text-slate-400">
+                    <Monitor className="w-12 h-12 mx-auto mb-2 opacity-55 text-blue-500 animate-pulse" />
+                    <p className="text-sm font-black text-slate-350">Cargando demo de video...</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>
