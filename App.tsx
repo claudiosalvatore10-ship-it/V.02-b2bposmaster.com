@@ -20,7 +20,7 @@ import { LandingPage } from './components/LandingPage';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShoppingCart, ShieldAlert, ShieldCheck, LogIn, LogOut, User as UserIcon, 
-  Package, FileText, UserPlus, X, RefreshCw, Sparkles, Ticket, Phone, Pause, 
+  Package, FileText, UserPlus, X, RefreshCw, Sparkles, Ticket, Phone, Pause, Camera, 
   Printer, ChefHat, Trash2, Plus, Minus, ChevronDown, ChevronUp, Monitor, 
   LayoutGrid, Building2, Link, Menu, History, Clock, FileBarChart, Settings, List, Grid, Delete, Tags, Tag, Archive, Utensils
 } from 'lucide-react';
@@ -36,10 +36,11 @@ import { CreditCard, DollarSign, Eye, EyeOff, Calculator } from 'lucide-react';
 import { ZReportModal } from './components/ZReportModal';
 import { EditCartItemModal } from './components/EditCartItemModal';
 import MerchantRegistrationForm from './components/MerchantRegistrationForm';
+import { AdminMobileView } from './components/AdminMobileView';
 
 const MainPOS: React.FC = () => {
   const { t } = useTranslation();
-  const [view, setView] = useState<'catalog' | 'admin' | 'kitchen'>('catalog');
+  const [view, setView] = useState<'catalog' | 'admin' | 'kitchen' | 'admin-mobile'>('catalog');
   const [showInvoice, setShowInvoice] = useState(false);
   const [showZReport, setShowZReport] = useState(false);
   const [printType, setPrintType] = useState<'customer' | 'kitchen' | null>(null);
@@ -106,6 +107,19 @@ const MainPOS: React.FC = () => {
       }
     });
     return () => unsubGlobal();
+  }, []);
+
+  useEffect(() => {
+    const checkHash = () => {
+      if (window.location.hash === '#admin-mobile') {
+        setView('admin-mobile');
+      } else if (window.location.hash === '#pos') {
+        setView('catalog');
+      }
+    };
+    checkHash();
+    window.addEventListener('hashchange', checkHash);
+    return () => window.removeEventListener('hashchange', checkHash);
   }, []);
 
   useEffect(() => {
@@ -1303,6 +1317,23 @@ const MainPOS: React.FC = () => {
     );
   }
 
+  if (view === 'admin-mobile') {
+    return (
+      <AdminMobileView 
+        products={products}
+        setProducts={setProducts}
+        categories={categories}
+        setCategories={setCategories}
+        orders={orders}
+        userStoreId={userStoreId}
+        onBack={() => {
+          setView('catalog');
+          window.location.hash = '#pos';
+        }}
+      />
+    );
+  }
+
   if (view === 'admin') {
     return (
       <AdminDashboard 
@@ -1580,6 +1611,13 @@ const MainPOS: React.FC = () => {
                            <ShieldAlert className="w-5 h-5" />
                            <span className="text-sm font-bold">{t('Admin Dashboard', 'Dashboard Admin')}</span>
                         </button>
+                        <button 
+                          onClick={() => { setView('admin-mobile'); setShowSideMenu(false); window.location.hash = '#admin-mobile'; }}
+                          className="flex items-center gap-4 p-4 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all font-bold"
+                        >
+                           <Camera className="w-5 h-5 text-emerald-400" />
+                           <span className="text-sm font-bold">{t('POS Admin Mobile', 'POS Admin Celular')}</span>
+                        </button>
                      </div>
                    )}
                  </div>
@@ -1779,6 +1817,7 @@ const MainPOS: React.FC = () => {
                 featuredProductId={featuredProduct?.id}
                 businessCategory={businessCategory}
                 storeSettings={storeSettings}
+                categories={categories}
               />
             </div>
 
@@ -2205,7 +2244,7 @@ const App: React.FC = () => {
     if (searchParams.get('mode') === 'login') return 'login';
     if (window.location.hash === '#customer') return 'customer';
     if (window.location.hash === '#kiosk') return 'kiosk';
-    if (window.location.hash === '#pos') return 'pos';
+    if (window.location.hash === '#pos' || window.location.hash === '#admin-mobile') return 'pos';
     if (window.location.hash === '#login') return 'login';
     if (window.location.hash === '#onboarding') return 'onboarding';
     return 'landing';
@@ -2221,7 +2260,7 @@ const App: React.FC = () => {
       if (window.location.hash === '#customer') setMode('customer');
       else if (window.location.hash === '#kiosk') setMode('kiosk');
       else if (window.location.hash === '#login') setMode('login');
-      else if (window.location.hash === '#pos') setMode('pos');
+      else if (window.location.hash === '#pos' || window.location.hash === '#admin-mobile') setMode('pos');
       else if (window.location.hash === '#onboarding') setMode('onboarding');
       else setMode('landing');
     };

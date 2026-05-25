@@ -717,7 +717,7 @@ export const GroceryView: React.FC<GroceryViewProps> = ({
                   <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-40 transition-opacity">
                     <GripVertical className="w-4 h-4 text-slate-500" />
                   </div>
-                  <span className="font-black text-slate-800 uppercase tracking-widest z-10 text-center text-[11px] xl:text-xs px-2 select-none">{cat.nombre}</span>
+                  <span className="font-black text-slate-800 uppercase tracking-widest z-10 text-center text-[11px] xl:text-xs px-2 select-none">{t(cat.nombre, cat.nombre)}</span>
                 </motion.button>
               );
             })}

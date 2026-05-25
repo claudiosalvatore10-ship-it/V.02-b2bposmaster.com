@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { collection, onSnapshot, query, addDoc, serverTimestamp, doc, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Product, Category, CartItem, SelectedModifier, StoreSettings } from '../types';
@@ -80,6 +81,7 @@ const ComboImage: React.FC<{ items: { productId: string }[]; products: Product[]
 };
 
 export const KioskView: React.FC = () => {
+  const { t } = useTranslation();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
@@ -402,7 +404,7 @@ export const KioskView: React.FC = () => {
                 <ShoppingBag className="w-8 h-8" />
               </div>
               <span className="text-[10px] font-black uppercase tracking-tight text-center leading-tight">
-                {cat.nombre}
+                {t(cat.nombre, cat.nombre)}
               </span>
             </button>
           ))}

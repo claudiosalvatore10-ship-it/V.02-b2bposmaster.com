@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Building2, Users, Package, Settings, Search, Trash2, ShieldCheck, Sparkles, LogOut, RefreshCw, CheckCircle, XCircle, Plus, Minus, X, Tag, ListFilter, Upload, Download, CreditCard, FileText, TrendingUp, TrendingDown, DollarSign, Briefcase, FolderOpen, Send, Filter, Link, Power, Globe, Cpu, Activity } from 'lucide-react';
 import { collection, onSnapshot, query, doc, deleteDoc, updateDoc, setDoc, getDocs, writeBatch, addDoc, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -2608,15 +2609,23 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
                   {/* CSS de impresión específico para el cheque y talonario US */}
                   <style>{`
                     @media print {
-                      body {
-                        visibility: hidden !important;
-                        background: white !important;
-                        color: black !important;
+                      #root {
+                        display: none !important;
                       }
-                      #printable-payroll-document, #printable-payroll-document * {
-                        visibility: visible !important;
+                      body > div:not(#printable-payroll-document) {
+                        display: none !important;
+                      }
+                      html, body {
+                        background: #ffffff !important;
+                        color: #000000 !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        height: auto !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
                       }
                       #printable-payroll-document {
+                        display: block !important;
                         position: absolute !important;
                         left: 0 !important;
                         top: 0 !important;
@@ -2627,7 +2636,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
                         box-shadow: none !important;
                         border: none !important;
                         box-sizing: border-box !important;
-                        display: block !important;
+                        background: #ffffff !important;
+                        z-index: 9999999 !important;
                       }
                       @page {
                         size: letter portrait;
@@ -3176,7 +3186,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
                         {/* ========================================================= */}
                         {/* ELEMENTO IMPRIMIBLE OFICIAL (Stack vertical: Check + Stub) */}
                         {/* ========================================================= */}
-                        <div id="printable-payroll-document" className="hidden print:block font-sans p-2 text-black bg-white w-full max-w-4xl mx-auto space-y-6">
+                        {createPortal(
+                          <div id="printable-payroll-document" className="hidden print:block font-sans p-2 text-black bg-white w-full max-w-4xl mx-auto space-y-6">
                           
                           {/* PARTE DE ARRIBA: EL CHEQUE BANCARIO */}
                           <div className="w-full aspect-[2.1/1] border border-black bg-white p-6 flex flex-col justify-between relative overflow-hidden box-border font-sans">
@@ -3422,7 +3433,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogo
                             </div>
 
                           </div>
-                        </div>
+                        </div>,
+                        document.body
+                        )}
 
                       </div>
 

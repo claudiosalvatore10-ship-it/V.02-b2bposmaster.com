@@ -10,7 +10,7 @@ import { CreateClientModal } from './CreateClientModal';
 import { CreatePromoModal } from './CreatePromoModal';
 import { Product, Client, Salesman, Order, Inventory, Category, Tax, Device, StoreSettings, Vendor, PurchaseOrder, BusinessCategory, Modifier, ModifierGroup, GlobalModifierGroup } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_CLIENTS, INITIAL_SALESMEN, INITIAL_CATEGORIES, INITIAL_TAXES, INITIAL_DEVICES, INITIAL_VENDORS, DEFAULT_BUSINESS_CATEGORIES } from '../constants';
-import { LayoutDashboard, Package, Users, Briefcase, Tags, Settings, ShoppingCart, Archive, ArrowLeft, Plus, Download, Upload, Printer as PrinterIcon, Trophy, TrendingUp, Menu, X, Truck, FileText, Search, Mail, Trash2, CheckCircle, Building2, Tag, RefreshCw, Sparkles, ShieldCheck, ListFilter, Copy, CreditCard, LayoutGrid, Hand, Grid, ChefHat, Globe, Edit2 } from 'lucide-react';
+import { LayoutDashboard, Package, Users, Briefcase, Tags, Settings, ShoppingCart, Archive, ArrowLeft, Plus, Download, Upload, Printer as PrinterIcon, Trophy, TrendingUp, Menu, X, Truck, FileText, Search, Mail, Trash2, CheckCircle, Building2, Tag, RefreshCw, Sparkles, ShieldCheck, ListFilter, Copy, CreditCard, LayoutGrid, Hand, Grid, ChefHat, Globe, Edit2, Camera } from 'lucide-react';
 import { doc, deleteDoc, setDoc, writeBatch, collection, getDocs, updateDoc, query, where, addDoc, onSnapshot } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import Papa from 'papaparse';
@@ -5901,6 +5901,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {isSidebarOpen && <span className="truncate uppercase tracking-tighter">Super Admin</span>}
             </button>
           )}
+
+          <button 
+            onClick={() => { window.location.hash = '#admin-mobile'; }}
+            title={!isSidebarOpen ? t('POS Admin Mobile', 'POS Admin Celular') : undefined}
+            className={`w-full flex items-center gap-2 px-3 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-black hover:bg-emerald-700 transition shadow-lg shadow-emerald-100 ${!isSidebarOpen ? 'justify-center px-0' : 'justify-center'}`}
+          >
+            <Camera className="w-4 h-4 flex-shrink-0" /> 
+            {isSidebarOpen && <span className="truncate">{t('POS Admin Mobile', 'POS Admin Celular')}</span>}
+          </button>
         </div>
 
         <nav className="flex-1 p-2 space-y-1 overflow-y-auto overflow-x-hidden">

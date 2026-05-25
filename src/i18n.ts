@@ -58,7 +58,20 @@ const en = {
     "Settings": "Settings",
     "Categories": "Categories",
     "Reports": "Reports",
-    "Devices": "Devices"
+    "Devices": "Devices",
+    "Bebidas": "Drinks",
+    "Drinks": "Drinks",
+    "Beverages": "Drinks",
+    "Tacos": "Tacos",
+    "Tortas": "Tortas",
+    "Burritos": "Burritos",
+    "Quesadillas": "Quesadillas",
+    "Postres": "Desserts",
+    "Desserts": "Desserts",
+    "Varios": "Sundries",
+    "Sundries": "Sundries",
+    "Acompañamientos": "Sides",
+    "Sides": "Sides"
   }
 };
 
@@ -119,7 +132,20 @@ const es = {
     "Settings": "Ajustes",
     "Categories": "Categorías",
     "Reports": "Reportes",
-    "Devices": "Dispositivos"
+    "Devices": "Dispositivos",
+    "Bebidas": "Bebidas",
+    "Drinks": "Bebidas",
+    "Beverages": "Bebidas",
+    "Tacos": "Tacos",
+    "Tortas": "Tortas",
+    "Burritos": "Burritos",
+    "Quesadillas": "Quesadillas",
+    "Postres": "Postres",
+    "Desserts": "Postres",
+    "Varios": "Varios",
+    "Sundries": "Varios",
+    "Acompañamientos": "Acompañamientos",
+    "Sides": "Acompañamientos"
   }
 };
 

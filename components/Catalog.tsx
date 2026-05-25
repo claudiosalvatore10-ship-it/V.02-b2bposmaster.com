@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Product, CartItem, Client, BusinessCategory, ModifierGroup, SelectedModifier } from '../types';
-import { Search, LayoutGrid, List, Plus, User, UserPlus, X as CloseIcon, Check, ChevronRight, Tag, Star } from 'lucide-react';
+import { Product, CartItem, Client, BusinessCategory, ModifierGroup, SelectedModifier, Category } from '../types';
+import { Search, LayoutGrid, List, Plus, User, UserPlus, X as CloseIcon, Check, ChevronRight, Tag, Star, ListFilter } from 'lucide-react';
 import { QuantityControl } from './QuantityControl';
 
 const ComboImage: React.FC<{ items: { productId: string }[]; products: Product[] }> = ({ items, products }) => {
@@ -174,6 +174,7 @@ interface CatalogProps {
   featuredProductId?: string;
   businessCategory?: BusinessCategory | null;
   storeSettings?: any;
+  categories?: Category[];
 }
 
 const Catalog: React.FC<CatalogProps> = ({ 
@@ -189,10 +190,25 @@ const Catalog: React.FC<CatalogProps> = ({
   onToggleFeatured,
   featuredProductId,
   businessCategory,
-  storeSettings
+  storeSettings,
+  categories = []
 }) => {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  
+  const availableCategories = React.useMemo(() => {
+    if (categories && categories.length > 0) {
+      return categories.map(c => c.nombre);
+    }
+    const uniq = new Set<string>();
+    products.forEach(p => {
+      if (p.categoria) {
+        uniq.add(p.categoria);
+      }
+    });
+    return Array.from(uniq);
+  }, [categories, products]);
   const [clientSearch, setClientSearch] = useState('');
   const [showClientResults, setShowClientResults] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
@@ -227,8 +243,10 @@ const Catalog: React.FC<CatalogProps> = ({
       (p.upc || '').includes(search) ||
       (p.boxBarcode && p.boxBarcode.includes(search));
     
-    if (isReceiveMode) return matchesSearch;
-    return p.showInPOS !== false && matchesSearch;
+    const matchesCategory = !selectedCategory || (p.categoria || '').toLowerCase() === selectedCategory.toLowerCase();
+    
+    if (isReceiveMode) return matchesSearch && matchesCategory;
+    return p.showInPOS !== false && matchesSearch && matchesCategory;
   });
 
   const filteredClients = clients.filter(c => 
@@ -361,6 +379,40 @@ const Catalog: React.FC<CatalogProps> = ({
           {viewMode === 'list' ? <LayoutGrid className="w-6 h-6" /> : <List className="w-6 h-6" />}
         </button>
       </div>
+      
+      {availableCategories.length > 0 && (
+        <div className="bg-white border-b border-gray-100 px-4 py-3.5 flex items-center gap-2 overflow-x-auto scrollbar-hide shrink-0 z-10 shadow-sm">
+          <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider mr-2 whitespace-nowrap flex items-center gap-1.5">
+            <ListFilter className="w-4 h-4 text-slate-400" />
+            {t('Category', 'Categoría')}:
+          </span>
+          
+          <button
+            onClick={() => setSelectedCategory('')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold uppercase transition-all tracking-wider whitespace-nowrap border ${
+              selectedCategory === ''
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-100 border-blue-600'
+                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200'
+            }`}
+          >
+            {t('All', 'Todas')}
+          </button>
+
+          {availableCategories.map((catName) => (
+            <button
+              key={catName}
+              onClick={() => setSelectedCategory(catName)}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold uppercase transition-all tracking-wider whitespace-nowrap border ${
+                selectedCategory.toLowerCase() === catName.toLowerCase()
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-100 border-blue-600'
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200'
+              }`}
+            >
+              {t(catName, catName)}
+            </button>
+          ))}
+        </div>
+      )}
       
       <div className="flex-1 overflow-y-auto p-4 pb-32">
         {filtered.length === 0 ? (
