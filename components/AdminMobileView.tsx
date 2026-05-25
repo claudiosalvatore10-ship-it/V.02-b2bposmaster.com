@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { 
   Home, Package, Tags, FileText, Camera, Plus, Search, X, 
   ChevronRight, ArrowLeft, Trash2, Edit, Save, BarChart3,
@@ -63,6 +64,7 @@ export const AdminMobileView: React.FC<AdminMobileViewProps> = ({
 
   // Scanner States
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const html5QrcodeRef = useRef<Html5Qrcode | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [manualBarcode, setManualBarcode] = useState('');
@@ -95,12 +97,25 @@ export const AdminMobileView: React.FC<AdminMobileViewProps> = ({
   }, [products]);
 
   // Handle a barcode when scanned via camera or keyboard
-  const handleScannedBarcode = (barcode: string) => {
+  const handleScannedBarcode = async (barcode: string) => {
     const trimmed = barcode.trim();
     if (!trimmed) return;
     
-    // Find absolute match
-    const found = products.find(p => p.upc === trimmed || p.boxBarcode === trimmed);
+    // Find absolute match (exact or ignoring leading zeros e.g. EAN-13 vs UPC-A fallback)
+    const cleanBar = (code: string) => code.replace(/^0+/, '').trim();
+    const cleanSearched = cleanBar(trimmed);
+
+    const found = products.find(p => {
+      const pUpc = p.upc || '';
+      const pBox = p.boxBarcode || '';
+      return (
+        pUpc === trimmed || 
+        pBox === trimmed || 
+        (pUpc && cleanBar(pUpc) === cleanSearched) || 
+        (pBox && cleanBar(pBox) === cleanSearched)
+      );
+    });
+
     if (found) {
       toast.success(t('Product found: ', 'Producto encontrado: ') + found.nombre + ` (${trimmed})`);
       setEditingProduct(found);
@@ -108,14 +123,40 @@ export const AdminMobileView: React.FC<AdminMobileViewProps> = ({
       setIsScanning(false);
       stopCamera();
     } else {
-      toast.info(t('New barcode scanned! Create new product.', '¡Código de barras nuevo! Regístra el producto.'), {
-        duration: 5000
-      });
-      // Open add product modal with this barcode
+      const lookupToastId = toast.loading(t('New barcode scanned! Searching name online...', '¡Código nuevo detectado! Buscando nombre en línea...'));
+      
+      let fetchedName = '';
+      try {
+        const res = await fetch('/api/barcode-lookup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ barcode: trimmed }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          fetchedName = data.name || '';
+        }
+      } catch (err) {
+        console.error('Error looking up barcode online:', err);
+      }
+
+      toast.dismiss(lookupToastId);
+
+      if (fetchedName) {
+        toast.success(t('Product identified: ', 'Producto identificado: ') + fetchedName, { duration: 4500 });
+      } else {
+        toast.info(t('New product registered! (No online name found)', '¡Nuevo producto registrado! (No se encontró nombre en línea)'), {
+          duration: 4000
+        });
+      }
+
+      // Open add product modal with this barcode and prefilled name
       const isBox = trimmed.startsWith('B-') || trimmed.length > 12; // heuristic
       setProductForm({
         id: `PROD-${Date.now()}`,
-        nombre: '',
+        nombre: fetchedName || '',
         precio: 0,
         costo: 0,
         categoria: categories[0]?.nombre || '',
@@ -131,33 +172,152 @@ export const AdminMobileView: React.FC<AdminMobileViewProps> = ({
     }
   };
 
-  // Web camera activation
+  // Web camera activation with real-time barcode decoding engine
   const startCamera = async () => {
     setIsScanning(true);
     setScanResult(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
-      }).catch(() => {
-        // Fallback for laptops/generic devices
-        return navigator.mediaDevices.getUserMedia({ video: true });
-      });
-      
-      setHasCameraPermission(true);
-      setCameraStream(stream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+    setHasCameraPermission(true);
+
+    // Give a slightly longer tick for #scanner-reader-element to fully mount in DOM and style transitions
+    setTimeout(async () => {
+      try {
+        const elementId = "scanner-reader-element";
+        const element = document.getElementById(elementId);
+        if (!element) {
+          console.error("Scanner DOM wrapper not found");
+          return;
+        }
+
+        // Clean up any existing scanner reference first to prevent locking drivers
+        if (html5QrcodeRef.current) {
+          try {
+            if (html5QrcodeRef.current.isScanning) {
+              await html5QrcodeRef.current.stop();
+            }
+          } catch (stopErr) {
+            console.warn("Error stopping existing scanner:", stopErr);
+          }
+          html5QrcodeRef.current = null;
+        }
+
+        // Initialize with standard retail 1D and QR code formats plus native browser decoder mapping
+        const html5Qrcode = new Html5Qrcode(elementId, {
+          verbose: false,
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.DATA_MATRIX
+          ],
+          useBarCodeDetectorIfSupported: true
+        });
+        html5QrcodeRef.current = html5Qrcode;
+
+        await html5Qrcode.start(
+          { facingMode: 'environment' },
+          {
+            fps: 20, // Slightly higher framerate for faster snapping
+            qrbox: (width, height) => {
+              // Wide aspect ratio is much more intuitive for retail barcodes
+              return {
+                width: Math.floor(width * 0.85),
+                height: Math.floor(height * 0.50)
+              };
+            },
+            aspectRatio: 1.0,
+          },
+          (decodedText) => {
+            if (decodedText) {
+              const scanned = decodedText.trim();
+              stopCamera();
+              handleScannedBarcode(scanned);
+            }
+          },
+          () => {} // Mute frame parsing errors to prevent flooding developer console
+        );
+      } catch (err) {
+        console.warn('Rear camera activation failed, trying generic fallback:', err);
+        try {
+          // If first start failed, let's recreate block reference for user-facing camera fallback
+          const elementId = "scanner-reader-element";
+          if (html5QrcodeRef.current) {
+            try {
+              if (html5QrcodeRef.current.isScanning) {
+                await html5QrcodeRef.current.stop();
+              }
+            } catch (e) {}
+            html5QrcodeRef.current = null;
+          }
+
+          const html5QrcodeFallback = new Html5Qrcode(elementId, {
+            verbose: false,
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.QR_CODE,
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.UPC_E,
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8,
+              Html5QrcodeSupportedFormats.CODE_39,
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.ITF
+            ],
+            useBarCodeDetectorIfSupported: true
+          });
+          html5QrcodeRef.current = html5QrcodeFallback;
+
+          await html5QrcodeFallback.start(
+            { facingMode: 'user' },
+            {
+              fps: 15,
+              qrbox: (width, height) => ({
+                width: Math.floor(width * 0.85),
+                height: Math.floor(height * 0.50)
+              })
+            },
+            (decodedText) => {
+              if (decodedText) {
+                const scanned = decodedText.trim();
+                stopCamera();
+                handleScannedBarcode(scanned);
+              }
+            },
+            () => {}
+          );
+        } catch (innerErr: any) {
+          console.error('All camera drivers failed:', innerErr);
+          setHasCameraPermission(false);
+          const errorMessage = innerErr?.message || String(innerErr);
+          toast.error(`${t('No camera stream found.', 'No se pudo acceder a la cámara o permisos denegados.')} Error: ${errorMessage}`, {
+            duration: 6000
+          });
+        }
       }
-    } catch (err) {
-      console.warn('Camera access error:', err);
-      setHasCameraPermission(false);
-      toast.error(t('No camera stream found. Using simulation/manual mode.', 'Sin acceso a cámara. Usando modo de simulación o manual.'));
-    }
+    }, 400); // 400ms ensures modal is fully active and #scanner-reader-element is ready in the DOM
   };
 
-  const stopCamera = () => {
+  const stopCamera = async () => {
+    if (html5QrcodeRef.current) {
+      const instance = html5QrcodeRef.current;
+      html5QrcodeRef.current = null; // Unset immediately to prevent concurrent stop attempts
+      try {
+        if (instance.isScanning) {
+          await instance.stop();
+        }
+      } catch (err) {
+        console.warn('Error stopping scanner instance:', err);
+      }
+    }
     if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
+      try {
+        cameraStream.getTracks().forEach(track => track.stop());
+      } catch (err) {}
       setCameraStream(null);
     }
   };
@@ -649,12 +809,9 @@ export const AdminMobileView: React.FC<AdminMobileViewProps> = ({
             {/* Video center screen viewbox frame with laser scanning pulse */}
             <div className="flex-1 my-6 rounded-[2rem] border-4 border-slate-800 bg-slate-900 overflow-hidden relative flex flex-col items-center justify-center">
               {hasCameraPermission !== false ? (
-                <video 
-                  ref={videoRef}
-                  autoPlay 
-                  playsInline 
-                  muted 
-                  className="w-full h-full object-cover scale-x-100" 
+                <div 
+                  id="scanner-reader-element" 
+                  className="w-full h-full min-h-[320px] rounded-[1.8rem] overflow-hidden bg-slate-950" 
                 />
               ) : (
                 <div className="text-center p-6 space-y-3">
@@ -665,7 +822,7 @@ export const AdminMobileView: React.FC<AdminMobileViewProps> = ({
               )}
 
               {/* Scanning red laser line */}
-              <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-1 bg-rose-500 shadow-lg shadow-rose-500/50 animate-pulse z-10" />
+              <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-1 bg-rose-500 shadow-lg shadow-rose-500/50 animate-pulse z-10 pointer-events-none" />
             </div>
 
             {/* Simulated mock barcode scan selectors & manual entry input for high availability */}
@@ -716,10 +873,10 @@ export const AdminMobileView: React.FC<AdminMobileViewProps> = ({
                     Scanner Coca Cola (100017)
                   </button>
                   <button 
-                    onClick={() => handleScannedBarcode('NUEVO_BARCODE')} 
+                    onClick={() => handleScannedBarcode('7501055300074')} 
                     className="p-2 border border-slate-800 hover:border-slate-700 bg-slate-850 rounded-lg text-blue-400 font-bold text-[11px] uppercase tracking-wide truncate text-center"
                   >
-                    Scanner Código Nuevo
+                    Scanner Código Nuevo (Demo)
                   </button>
                 </div>
               </div>
